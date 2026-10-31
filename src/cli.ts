@@ -9,6 +9,9 @@ import { creators, launch } from "./commands/launch.ts";
 import { PlanError, type Count, type Pick, type Split } from "./plan/plan.ts";
 import type { Timing } from "./exec/run.ts";
 import type { WalletRow } from "./store/db.ts";
+import { applyPreset, presetCommand } from "./presets.ts";
+import { Alerts, alertsCommand } from "./alerts.ts";
+import { pipelineCommand } from "./pipeline/cli.ts";
 
 const USAGE = `swarm — drives many wallets through the FLOOR Program (testnets and local chains only)
 
@@ -32,6 +35,10 @@ const USAGE = `swarm — drives many wallets through the FLOOR Program (testnets
                [--team-buy <amount | max>] [--slippage BPS] [--times N] [--dry-run]
                                                       create launches; a group's wallets take turns
   swarm runs [id]
+  swarm preset save <name> -- <flags…> | list | rm <name>      saved flags; use one with --use <name>
+  swarm pipeline save <name> <file.json> | run <name> | list | show <name> | rm <name>
+  swarm alerts [webhook <url> | off | test]
+  swarm daemon [--port 7717]                          the local HTTP API and web UI (127.0.0.1 only)
 
 knobs:
   --count most[:N] | min | exact:N | random:A:B | pct:P
@@ -39,6 +46,7 @@ knobs:
   --split weights:MIN:MAX | balance | equal
   --instant | --random MINMS:MAXMS     (default --random 500:3000)
   --retries N (3) · --slippage BPS (300) · --seed S · --dry-run
+  --use NAME                                          merge a saved preset's flags under these
 
 output:
   --json      one JSON object on stdout: {"ok":true,"command":…,"result":…,"log":[…]}
@@ -122,6 +130,15 @@ export const COMMANDS = [
   { cmd: "sell", args: "<tokens | P%> <target> (--group g | --ids …) [knobs]", does: "sell tokens (or P % of each holding) across wallets", unlocks: true },
   { cmd: "launch", args: "<name> <SYMBOL> --chain c --from <id | group> [--preset 3] [--quote native|0x…] [--team-buy <amount | max>] [--times N] [--dry-run]", does: "create launches from the wallet(s) --from names; the Team Buy is priced from the chain's row", unlocks: true },
   { cmd: "runs", args: "[id]", does: "list runs, or one run's ledger", unlocks: false },
+  { cmd: "preset save", args: "<name> -- <flags…> [--amount X]", does: "save count / pick / split / timing / slippage / group flags (and a buy's amount) under a name; use it with --use <name>", unlocks: false },
+  { cmd: "preset list", args: "", does: "list saved presets", unlocks: false },
+  { cmd: "preset rm", args: "<name>", does: "remove a preset", unlocks: false },
+  { cmd: "pipeline save", args: "<name> <file.json>", does: "save a pipeline: ordered steps, each a swarm command with an optional gate", unlocks: false },
+  { cmd: "pipeline run", args: "<name>", does: "run a saved pipeline step by step", unlocks: true },
+  { cmd: "pipeline list", args: "", does: "list pipelines and their steps", unlocks: false },
+  { cmd: "pipeline rm", args: "<name>", does: "remove a pipeline", unlocks: false },
+  { cmd: "alerts", args: "[webhook <url> | off | test]", does: "show or set the alert webhook (a POST of JSON when a run ends or a pipeline step fails)", unlocks: false },
+  { cmd: "daemon", args: "[--port 7717]", does: "serve the HTTP API and web UI on 127.0.0.1", unlocks: false },
 ] as const;
 
 const PICKS: Pick[] = ["random", "least_used", "fresh", "holders", "richest", "ordered"];
@@ -156,6 +173,8 @@ const OPTIONS = {
   "team-buy": { type: "string" },
   times: { type: "string" },
   "dry-run": { type: "boolean" },
+  use: { type: "string" },
+  port: { type: "string" },
   json: { type: "boolean" },
   help: { type: "boolean", short: "h" },
 } as const;
@@ -196,11 +215,22 @@ export interface MainContext {
 }
 
 export async function main(argv: string[], log: (s: string) => void = console.log, ctx: MainContext = {}): Promise<unknown> {
-  let parsed;
-  try {
-    parsed = parseArgs({ args: argv, options: OPTIONS, allowPositionals: true });
-  } catch (e) {
-    throw new UsageError((e as Error).message);
+  const parse = (args: string[]) => {
+    try {
+      return parseArgs({ args, options: OPTIONS, allowPositionals: true });
+    } catch (e) {
+      throw new UsageError((e as Error).message);
+    }
+  };
+  let parsed = parse(argv);
+  if (parsed.values.use && parsed.positionals[0] !== "preset") {
+    // `--use name`: the preset's flags go under the command's own
+    const sw = (ctx = { ...ctx, swarm: ctx.swarm ?? new Swarm(process.env.SWARM_NAME ?? "default") }).swarm!;
+    try {
+      parsed = parse(applyPreset(sw.store, argv));
+    } catch (e) {
+      throw e instanceof UsageError ? e : new UsageError((e as Error).message);
+    }
   }
   const { values: v, positionals: pos } = parsed;
   const [cmd, sub, ...rest] = pos;
@@ -340,6 +370,24 @@ export async function main(argv: string[], log: (s: string) => void = console.lo
       }, log);
       return { launches: made };
     }
+    case "preset":
+      return asUsage(() => presetCommand(s.store, sub, rest, log));
+    case "alerts":
+      return asUsage(() => alertsCommand(new Alerts(s.store), sub, rest, log));
+    case "pipeline":
+      return pipelineCommand(s, sub, rest, log, async (a, onLine) => (await runJson(a, { swarm: s }, onLine)).out);
+    case "daemon": {
+      const { startDaemon } = await import("./daemon/server.ts");
+      const d = await startDaemon({ swarm: s, port: v.port ? Number(v.port) : undefined });
+      log(`swarm daemon on 127.0.0.1:${d.port} (stop with ctrl-c)`);
+      log(`open ${d.url}`);
+      await new Promise<void>((resolve) => {
+        process.once("SIGINT", resolve);
+        process.once("SIGTERM", resolve);
+      });
+      await d.close();
+      return { stopped: true };
+    }
     case "runs": {
       if (sub) {
         const r = s.store.run(Number(sub));
@@ -352,6 +400,15 @@ export async function main(argv: string[], log: (s: string) => void = console.lo
     }
   }
   throw new UsageError(`unknown command "${cmd}" (swarm help)`);
+}
+
+/** A failure in a plain-argument command (preset, alerts, pipeline) is a usage error, exit 3. */
+async function asUsage<T>(f: () => T | Promise<T>): Promise<T> {
+  try {
+    return await f();
+  } catch (e) {
+    throw e instanceof PlanError || e instanceof UsageError ? e : new UsageError((e as Error).message);
+  }
 }
 
 /** A wallet as data: both addresses (null where its key has none). */
