@@ -17,8 +17,9 @@ loopback (Surfpool, solana-test-validator); mainnet-beta is refused by its genes
 | Wallets: derive, import, tag into groups, list with balances | The web UI (designed, not wired) |
 | Chains: add, verify, list · pasting a token address resolves its launch | |
 | Solana, every command above: HD wallets on `m/44'/501'/i'/0'` (the same addresses as `solana-keygen` and Phantom), `solana-keygen` JSON or base58 imports, SPL / Token-2022 quotes, wSOL launches traded in SOL | |
-| `fund`, `buy`, `sell` with Count · Pick · Split, timing, retries and re-routing | Team Slot members, snipe, TP / SL, claim, swap, raw, pipelines |
+| `fund`, `buy`, `sell` with Count · Pick · Split, timing, retries and re-routing | TP / SL, raw, pipelines |
 | `launch`: the creator picked by `--from <id \| group>`, an optional Team Buy (`--team-buy <amount \| max>`) priced from the chain's row, the Team Slot at the row's max | |
+| `swap`, `snipe`, `claim`, `team-slot add` / `buy` (below) | |
 | A run ledger per send · `--dry-run` · `--json` for scripts | Privy server wallets |
 | Testnet forks: `scripts/local-evm.sh --fork <testnet rpc> --chain <c> --port N` | |
 
@@ -72,6 +73,31 @@ swarm buy 5 sol:<mint> --group snipers --count most:20 --instant
 ```
 
 `swarm help` lists every command and knob.
+
+## Swap, snipe, claim and the Team Slot
+
+All four take `--dry-run` and `--json`, and each is recorded as a run in the ledger.
+
+```sh
+# every picked wallet sells its part of launch A and buys launch B with what the sell returned
+swarm swap 50% local:$A local:$B --group swarm --instant
+# wait for the next launch on a chain that matches, then run `buy` on it at once (--within seconds, default 600)
+swarm snipe 20 --chain local (--creator 0xADDR | --symbol SYM | --any) --group swarm [--within 120]
+# what each wallet is owed (Team Fees, Team Slot, holder rewards, referrals, an unlocked Team Buy), claimed; wallets owed nothing are skipped
+swarm claim local:$A --group swarm [--to 0xADDR]        # or: swarm claim --all-launches --group swarm
+# the creator wallet adds members to the Team Slot; members spend their Team Share on the launch's token
+swarm team-slot add local:$A --from 17 (--member 3,4,0xADDR | --handle x:alice) --shares 1
+swarm team-slot buy 0.05 local:$A --group swarm
+```
+
+- `swap`: both launches must be on one chain and share a quote asset, or it refuses by name. If a wallet's sell lands but its
+  buy fails, the run is `partial`, the wallet is reported (the quote stays in it) and the sell is never retried.
+- `snipe`: with no match inside the window it says so and exits 0 with `matched: false`. `--dry-run` watches but sends nothing.
+  On Solana the watch polls the program's create events.
+- `claim --all-launches` covers every launch the swarm created, joined as a Team Slot member, or traded. `--to` sends
+  EVM's owed payouts bucket to another address; Solana has no such claim and refuses `--to` by name. On Solana the unlocked
+  Team Buy and Team Share tokens are claimed with the same command.
+- `team-slot buy` spends at most the Team Share each member is owed; the tokens are booked and arrive with `claim`.
 
 ## The knobs
 
