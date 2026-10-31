@@ -13,13 +13,13 @@ loopback (Surfpool, solana-test-validator); mainnet-beta is refused by its genes
 
 | Built | Not built yet |
 |---|---|
-| The vault: an HD seed and imported keys, encrypted (scrypt + AES-256-GCM, file mode 600) | The daemon and its HTTP API |
-| Wallets: derive, import, tag into groups, list with balances | The web UI (designed, not wired) |
+| The vault: an HD seed and imported keys, encrypted (scrypt + AES-256-GCM, file mode 600) | Price and market-cap gates in pipelines (the chain adapters have no price read yet) |
+| Wallets: derive, import, tag into groups, list with balances | |
 | Chains: add, verify, list · pasting a token address resolves its launch | |
 | Solana, every command above: HD wallets on `m/44'/501'/i'/0'` (the same addresses as `solana-keygen` and Phantom), `solana-keygen` JSON or base58 imports, SPL / Token-2022 quotes, wSOL launches traded in SOL | |
-| `fund`, `buy`, `sell` with Count · Pick · Split, timing, retries and re-routing | Team Slot members, snipe, TP / SL, claim, swap, raw, pipelines |
+| `fund`, `buy`, `sell` with Count · Pick · Split, timing, retries and re-routing | Team Slot members, snipe, TP / SL, claim, swap, raw |
 | `launch`: the creator picked by `--from <id \| group>`, an optional Team Buy (`--team-buy <amount \| max>`) priced from the chain's row, the Team Slot at the row's max | |
-| A run ledger per send · `--dry-run` · `--json` for scripts | Privy server wallets |
+| A run ledger per send · `--dry-run` · `--json` for scripts · the daemon and web UI · presets · pipelines · alerts | Privy server wallets |
 | Testnet forks: `scripts/local-evm.sh --fork <testnet rpc> --chain <c> --port N` | |
 
 ## Install
@@ -85,6 +85,99 @@ swarm buy 5 sol:<mint> --group snipers --count most:20 --instant
 The general settings sit next to every command: `swarm settings per-wallet local:native 0.05:0.6` and
 `swarm settings wallets 5:50`.
 
+## The daemon and the web UI
+
+```sh
+swarm daemon [--port 7717]
+# swarm daemon on 127.0.0.1:7717 (stop with ctrl-c)
+# open http://127.0.0.1:7717/?t=<token>
+```
+
+Open the printed URL. It sets a same-origin cookie and drops the token from the address bar; the vault stays locked until
+you type the passphrase into the unlock box (the daemon never reads `SWARM_PASSPHRASE`). The page has the target box, the
+wallet grid (balances on the chain you pick, token holdings for the target), a command panel with a tab per command, a live
+dry-run preview, the runs history, a live log, pipelines and alerts. New commands show up as tabs by themselves.
+
+Safety, in short:
+
+- It binds `127.0.0.1` and refuses any other `Host` header (403).
+- Every request needs the random token: `Authorization: Bearer <token>` or the cookie above (401 otherwise). The token is
+  new on every start and is written to `<swarm dir>/daemon.token` with mode 0600. A write that carries a foreign `Origin` is refused.
+- Keys and the passphrase stay in the daemon's memory. The API never returns them and nothing logs a request body.
+- Commands run one at a time per swarm, in the order they were queued. A running command cannot be interrupted; a queued one can be cancelled.
+
+The JSON API (all under the token):
+
+| Call | What |
+|---|---|
+| `POST /api/unlock {passphrase}` · `POST /api/lock` · `GET /api/state` | vault state, chains (host only), groups, queue |
+| `POST /api/run {argv}` | queue one command; answers `{job}`. Log lines and the end arrive on `GET /api/events` as `{job, line}` and `{job, done, result}` |
+| `POST /api/preview {argv}` | `buy`, `sell`, `fund`, `launch` with `--dry-run`, answered at once |
+| `GET /api/wallets?chain=&token=&group=` | wallets, with balances when a chain is named |
+| `GET /api/target?t=` | resolve a pasted address |
+| `GET /api/runs` · `GET /api/runs/:id` | the local history (sends included, and the pipeline a run belongs to) |
+| `GET /api/commands` | the command list the UI is built from |
+| `/api/presets`, `/api/pipelines`, `/api/pipeline-runs`, `/api/alerts` | below |
+
+## Presets
+
+A preset is a name for a set of flags: Count, Pick, Split, timing, retries, slippage, group or ids, chain, token, from,
+quote, team-buy, times, and for a buy the amount.
+
+```sh
+swarm preset save sniper -- --count most:40 --pick least_used --split weights:0.2:1 --instant --amount 10
+swarm preset list
+swarm buy <target> --group snipers --use sniper          # the amount comes from the preset
+swarm buy 2 <target> --group snipers --use sniper --count exact:5   # what you type wins
+swarm preset rm sniper
+```
+
+`--use <name>` puts the preset's flags under the command's own. A flag named on the command line replaces the preset's
+(`--instant` and `--random` replace each other, as do `--group` and `--ids`). In the UI, pick a preset and Apply to fill the
+form; Save as keeps the form's knobs.
+
+## Pipelines
+
+A pipeline is a named list of steps. Each step is a swarm command and a gate:
+
+```json
+{ "steps": [
+  { "argv": ["buy", "10", "local:0x…", "--group", "snipers", "--use", "sniper"] },
+  { "argv": ["sell", "50%", "local:0x…", "--group", "snipers"], "when": { "kind": "wait", "seconds": 300 }, "on_fail": "continue" }
+] }
+```
+
+- `when`: `after` (default: the step before has ended) · `wait` (seconds before the step) · `until_run_status` (poll the
+  previous step's run, or `run: <id>`, until it is `done`; it fails if the run ends otherwise or after `timeoutSeconds`,
+  600 by default). Strings work too: `"wait 30"`, `"until_run_status done"`.
+- `on_fail`: `stop` (default; the rest is skipped) or `continue`. A step fails when its command fails or its run reports `failed`.
+- Price and market-cap gates (`price_above`, `price_below`, `mcap_above`) are refused with a TODO message: the chain
+  adapters have no price read yet.
+
+```sh
+swarm pipeline save open-and-sell steps.json
+swarm pipeline run open-and-sell
+swarm pipeline list
+```
+
+In the UI (Pipelines tab) build one from the step editor, run it, watch the steps, and stop it. A stop ends the waits at
+once and skips the steps not started; the step in flight finishes. Each step's run id is stored, so a run in the history
+shows its pipeline.
+
+## Alerts
+
+When a run finishes (`done`, `partial` or `failed`), a command fails, or a pipeline step fails, the daemon raises an alert:
+a toast in the page, a browser notification (the Alerts tab asks for permission), and, if set, a POST to a webhook URL.
+
+```sh
+swarm alerts webhook https://discord.com/api/webhooks/…      # or a Telegram sendMessage URL with chat_id=…
+swarm alerts test
+swarm alerts off
+```
+
+The body is `{"text": "…", "content": "…", "alert": {id, at, kind, level, title, text, run?, pipeline?}}`. Keys, the
+passphrase, the token and the path of any URL are removed from the text first. The UI shows the webhook's host only.
+
 ## Running it on a server
 
 A small Linux box is enough: 2 vCPU and 2 GB RAM handle hundreds of wallets. The swarm keeps its state in one folder,
@@ -129,8 +222,8 @@ A small Linux box is enough: 2 vCPU and 2 GB RAM handle hundreds of wallets. The
    ```
 5. **Back up** `SWARM_HOME` (it holds the vault and the ledger) and write the seed down when `swarm init` makes it. The seed
    is the only way back if the vault file is lost.
-6. **No ports.** Today the swarm is a command line and opens nothing. When the daemon lands it listens on `127.0.0.1`
-   only; reach it over SSH (`ssh -L 7070:127.0.0.1:7070 swarm@host`).
+6. **Ports.** The command line opens nothing. `swarm daemon` listens on `127.0.0.1` only; reach it over SSH
+   (`ssh -L 7717:127.0.0.1:7717 swarm@host`) and open the printed URL there.
 
 ## Driving it from a script
 
