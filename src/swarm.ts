@@ -48,6 +48,17 @@ export class Swarm {
     return join(this.dir, "chains.json");
   }
 
+  get unlocked(): boolean {
+    return this.vault !== null;
+  }
+
+  /** Forgets the keys (the daemon's lock). */
+  lock(): void {
+    this.vault = null;
+    this.accounts.clear();
+    this.solKeys.clear();
+  }
+
   hasVault(): boolean {
     return Vault.exists(this.vaultPath);
   }

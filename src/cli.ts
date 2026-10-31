@@ -190,7 +190,12 @@ function selected(s: Swarm, v: Values): WalletRow[] {
 }
 
 /** Runs one command. Human lines go to `log`; the return value is the command's result as data (what `--json` prints). */
-export async function main(argv: string[], log: (s: string) => void = console.log): Promise<unknown> {
+/** `ctx.swarm`: an already-open (and possibly unlocked) swarm, as the daemon holds one; the CLI opens its own. */
+export interface MainContext {
+  swarm?: Swarm;
+}
+
+export async function main(argv: string[], log: (s: string) => void = console.log, ctx: MainContext = {}): Promise<unknown> {
   let parsed;
   try {
     parsed = parseArgs({ args: argv, options: OPTIONS, allowPositionals: true });
@@ -203,8 +208,9 @@ export async function main(argv: string[], log: (s: string) => void = console.lo
     log(USAGE);
     return { usage: USAGE, commands: COMMANDS };
   }
-  const s = new Swarm(process.env.SWARM_NAME ?? "default");
+  const s = ctx.swarm ?? new Swarm(process.env.SWARM_NAME ?? "default");
   const unlock = async (): Promise<void> => {
+    if (s.unlocked) return;
     if (!s.hasVault()) throw new Error(`no vault yet at ${s.vaultPath} (swarm init)`);
     s.unlock(await passphrase());
   };
@@ -359,11 +365,11 @@ export const exitCode = (e: unknown): number => (e instanceof PlanError ? 2 : e 
 const errorKind = (e: unknown): string => (e instanceof PlanError ? "plan" : e instanceof UsageError ? "usage" : "error");
 
 /** The JSON envelope `--json` prints, for one command's outcome. */
-export async function runJson(argv: string[]): Promise<{ out: string; code: number }> {
+export async function runJson(argv: string[], ctx: MainContext = {}, onLine?: (l: string) => void): Promise<{ out: string; code: number }> {
   const lines: string[] = [];
   const command = argv.filter((a) => !a.startsWith("-")).slice(0, 2).join(" ");
   try {
-    const result = await main(argv, (l) => lines.push(l));
+    const result = await main(argv, (l) => (lines.push(l), onLine?.(l)), ctx);
     return { out: JSON.stringify({ ok: true, command, result: result ?? null, log: lines }, jsonSafe), code: 0 };
   } catch (e) {
     return { out: JSON.stringify({ ok: false, command, error: { kind: errorKind(e), message: (e as Error).message }, log: lines }, jsonSafe), code: exitCode(e) };
