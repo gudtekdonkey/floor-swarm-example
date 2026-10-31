@@ -3,7 +3,7 @@
 // priced off the row; the Team Slot opens at the row's max. A group's wallets take turns, one launch each, in id order.
 import type { WalletRow } from "../store/db.ts";
 import { fmt, type Swarm } from "../swarm.ts";
-import type { Log } from "./trade.ts";
+import { targetKey, type Log } from "./trade.ts";
 import { parseUnits } from "viem";
 
 export interface LaunchArgs {
@@ -72,6 +72,8 @@ export async function launch(s: Swarm, from: readonly WalletRow[], a: LaunchArgs
     if (have < need) throw new Error(`wallet ${w.id} ${address} doesn't have enough ${q.symbol} to launch: it holds ${fmt(have, q.decimals, q.symbol)}, the create needs up to ${fmt(need, q.decimals, q.symbol)}${isNative ? " (with its gas reserve)" : ""}`);
     const r = await l.create(w, name, symbol);
     log(`  ✓ launch ${r.launchId} ${r.token} ${r.tx}`);
+    // the swarm's own creates are known to `claim --all-launches`
+    if (r.token) s.store.noteLaunch(targetKey({ chain: a.chain, family: c.family, token: r.token }), w.id, "created");
     out.push({ creator: { id: w.id, address }, launchId: r.launchId, token: r.token, name, symbol, paid: r.paid, tx: r.tx });
   }
   return out;

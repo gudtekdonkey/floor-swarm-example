@@ -57,6 +57,69 @@ export interface Launcher {
   create(w: WalletRow, name: string, symbol: string): Promise<{ launchId: bigint | null; token: string | null; tx: string; paid: bigint }>;
 }
 
+/** Which launches `snipe` takes: a creator's, a ticker's, or any. */
+export interface LaunchFilter {
+  /** The creator's address on this chain's family. */
+  creator?: string;
+  /** The ticker (compared without case). */
+  symbol?: string;
+  any?: boolean;
+}
+
+/** A launch the program has just created, as its create event states it. */
+export interface CreatedLaunch {
+  launch: LaunchRef;
+  creator: string;
+  name: string;
+  symbol: string;
+}
+
+/**
+ * What a wallet is owed on one launch. The quote legs are in the launch's quote (base units); `teamBuy` (the unlocked Team Buy)
+ * and `shareBought` (tokens a Team Share buy booked) are launch tokens the claim pays out.
+ */
+export interface Owed {
+  creator: bigint;
+  creatorRef: bigint;
+  teamSlot: bigint;
+  holder: bigint;
+  teamBuy: bigint;
+  shareBought: bigint;
+}
+
+export interface OwedLaunch {
+  launch: LaunchRef;
+  owed: Owed;
+}
+
+/** Owed to the wallet in a quote, not by one launch: trader referrals, and EVM's quote-level legs and failed payouts. */
+export interface ExtraOwed {
+  quote: string;
+  kind: "creator" | "creatorRef" | "teamSlot" | "traderRef" | "payout";
+  amount: bigint;
+}
+
+export interface WalletOwed {
+  launches: OwedLaunch[];
+  extra: ExtraOwed[];
+  /** The adapter's own read, handed back to `claim` (opaque to the commands). */
+  raw: unknown;
+}
+
+export interface ClaimOut {
+  /** The claim transactions sent, in order. */
+  txs: string[];
+  /** What reached the wallet, per asset (the quote, net of the gas the claim cost when the quote is the gas coin). */
+  claimed: { asset: string; amount: bigint }[];
+  /** Launch tokens the claims paid (the unlocked Team Buy, tokens a Team Share buy booked). */
+  tokens: bigint;
+  /** A claim that failed part-way: `txs` holds what was sent before it. */
+  error?: string;
+}
+
+/** A Team Slot member: a wallet, or a social handle that is bound to a wallet later. */
+export type SlotMember = { wallet: string } | { platform: string; handle: string };
+
 export interface Chain {
   readonly name: string;
   readonly family: Family;
@@ -81,6 +144,28 @@ export interface Chain {
   sell(w: WalletRow, l: LaunchRef, tokensIn: bigint, slippageBps: number, ahead?: bigint): Promise<TradeOut>;
   transfer(w: WalletRow, asset: string, to: string, amount: bigint): Promise<string>;
   launcher(a: LaunchArgsOnChain): Promise<Launcher>;
+
+  // ---- snipe -------------------------------------------------------------------------------------------------------------
+  /** A point to watch creates from: launches created after it are found by `nextLaunch`. */
+  createsMark(): Promise<string>;
+  /**
+   * The first launch created after `since` that `accept` takes, or null once `deadline` (epoch ms) has passed. Reads only.
+   */
+  nextLaunch(since: string, accept: (c: CreatedLaunch) => boolean, deadline: number): Promise<CreatedLaunch | null>;
+
+  // ---- claim -------------------------------------------------------------------------------------------------------------
+  /** What `w` is owed on `launches` (and in their quotes). Reads only. */
+  owedOf(w: WalletRow, launches: readonly LaunchRef[]): Promise<WalletOwed>;
+  /** Sends the claim transactions for what `owed` read. `to`: where EVM's owed payouts go (Solana refuses it). */
+  claim(w: WalletRow, owed: WalletOwed, to?: string): Promise<ClaimOut>;
+
+  // ---- Team Slot ---------------------------------------------------------------------------------------------------------
+  /** The launch's creator adds `member` to its Team Slot with `shares` share units (or tops it up). */
+  teamSlotAdd(w: WalletRow, l: LaunchRef, member: SlotMember, shares: bigint): Promise<string>;
+  /** The Team Share a member wallet can spend on a buy now (quote base units; 0 when it holds no place). */
+  teamShareOwed(w: WalletRow, l: LaunchRef): Promise<bigint>;
+  /** A member spends up to `amountIn` of its owed Team Share on the launch's token; the tokens are booked to it (claim). */
+  teamShareBuy(w: WalletRow, l: LaunchRef, amountIn: bigint, slippageBps: number): Promise<TradeOut>;
 }
 
 /** A send that failed with a reason worth printing, and whether a retry could help. */

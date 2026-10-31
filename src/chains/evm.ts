@@ -6,14 +6,21 @@ import { allow, type EvmChainConfig } from "./config.ts";
 import { approveCall, buyCall, createLaunchCall, createQuoteTotal, decodeFloorAmmResult, decodeFloorError, decodeQuoteEntry, floorAmmCall, floorTokenCall, quoteEntryCall, sellCall, type EvmCall } from "../../vendor/floor-sdk/evm/floor/calls.ts";
 import { decodePresetRowEvmV2, presetRowCallV2 } from "../../vendor/floor-sdk/v2/presetRowEvm.ts";
 import { planTeamBuy, rowOf } from "./teambuy.ts";
-import { RETRYABLE, SendError, type Chain, type Keys, type LaunchArgsOnChain, type Launcher, type LaunchRef, type QuoteInfo, type TradeOut } from "./chain.ts";
+import { RETRYABLE, SendError, type Chain, type ClaimOut, type CreatedLaunch, type ExtraOwed, type Keys, type LaunchArgsOnChain, type Launcher, type LaunchRef, type OwedLaunch, type QuoteInfo, type SlotMember, type TradeOut, type WalletOwed } from "./chain.ts";
 import type { WalletRow } from "../store/db.ts";
-import { decodeFloorLogs } from "../../vendor/floor-sdk/evm/floor/events.ts";
+import { FLOOR_EVENT_TOPICS, decodeFloorLogs } from "../../vendor/floor-sdk/evm/floor/events.ts";
+import { evmOwedReaderOfClaimsViewV2 } from "../../vendor/floor-sdk/v2/claimAllEvm.ts";
+import { planEvmClaimAllV2 } from "../../vendor/floor-sdk/v2/claims-evm.ts";
+import { teamShareBuyCallV2, teamSlotAddCallV2 } from "../../vendor/floor-sdk/v2/tx/evm.ts";
+import { EVM_TOKEN_SCALE } from "../../vendor/floor-sdk/v2/market-evm.ts";
+import { decodeTeamShareOf, viewCall } from "../../vendor/floor-sdk/v2/evm.ts";
 import { decodeFunctionResult } from "../../vendor/floor-sdk/evm/items.ts";
 import { FLOOR_TOKEN_ABI } from "../../vendor/floor-sdk/evm/floor/abi.gen.ts";
 
 export const NATIVE = "0x0000000000000000000000000000000000000000";
 const MAX = (1n << 256n) - 1n;
+const NEXT_POLL_MS = 250;
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 // a receipt is awaited CONFIRM_MS at a time, for at most CONFIRM_ROUNDS while the node still knows the transaction
 const CONFIRM_MS = 120_000;
 const CONFIRM_ROUNDS = 5;
@@ -274,6 +281,106 @@ export class EvmChain implements Chain {
         return { launchId: (ev?.args.launchId as bigint | undefined) ?? null, token: (ev?.args.token as string | undefined) ?? null, tx: rc.transactionHash, paid: pays };
       },
     };
+  }
+
+  // ---- snipe -----------------------------------------------------------------------------------------------------------
+
+  async createsMark(): Promise<string> {
+    return String(await this.client.getBlockNumber());
+  }
+
+  /** Polls `LaunchCreated` logs of this chain's FloorAmm from the block after `since` until one is accepted or the deadline. */
+  async nextLaunch(since: string, accept: (c: CreatedLaunch) => boolean, deadline: number): Promise<CreatedLaunch | null> {
+    let next = BigInt(since) + 1n;
+    const topic = FLOOR_EVENT_TOPICS["LaunchCreated"]!;
+    for (;;) {
+      const head = await this.client.getBlockNumber();
+      if (head >= next) {
+        const logs = (await this.client.request({
+          method: "eth_getLogs",
+          params: [{ address: this.cfg.floorAmm as Hex, topics: [topic as Hex], fromBlock: `0x${next.toString(16)}`, toBlock: `0x${head.toString(16)}` }],
+        })) as { address: string; topics: string[]; data: string }[];
+        next = head + 1n;
+        for (const ev of decodeFloorLogs(logs, [this.cfg.floorAmm])) {
+          if (ev.name !== "LaunchCreated") continue;
+          const a = ev.args;
+          const launch: LaunchRef = { chain: this.name, family: "evm", launchId: a.launchId as bigint, token: a.token as string, tokenDecimals: 18, quote: await this.quoteInfo(a.quote as string) };
+          const c: CreatedLaunch = { launch, creator: a.creator as string, name: a.name as string, symbol: a.symbol as string };
+          if (accept(c)) return c;
+        }
+      }
+      if (Date.now() >= deadline) return null;
+      await sleep(Math.max(0, Math.min(NEXT_POLL_MS, deadline - Date.now())));
+    }
+  }
+
+  // ---- claim -----------------------------------------------------------------------------------------------------------
+
+  private claimQuotes(launches: readonly LaunchRef[]): string[] {
+    return [...new Set([NATIVE, ...launches.map((l) => l.quote.address)].map((q) => q.toLowerCase()))];
+  }
+
+  async owedOf(w: WalletRow, launches: readonly LaunchRef[]): Promise<WalletOwed> {
+    const a = this.account(w).address;
+    const reader = evmOwedReaderOfClaimsViewV2({ floorAmm: this.cfg.floorAmm, ethCall: (to, data) => this.ethCall({ to, data, value: 0n }, a) });
+    const view = await reader.owed(a, launches.map((l) => l.launchId), this.claimQuotes(launches));
+    const rows: OwedLaunch[] = view.launches.map((r, i) => ({
+      launch: launches[i]!,
+      // the view's token legs are in math units; a launch token is 18 decimals
+      owed: { creator: r.creator, creatorRef: r.creatorRef, teamSlot: r.teamSlot, holder: r.holder, teamBuy: r.teamBuy * EVM_TOKEN_SCALE, shareBought: r.shareBought * EVM_TOKEN_SCALE },
+    }));
+    const extra: ExtraOwed[] = [];
+    for (const q of view.quotes) {
+      for (const kind of ["creator", "creatorRef", "teamSlot", "traderRef", "payout"] as const) if (q[kind] > 0n) extra.push({ quote: q.quote, kind, amount: q[kind] });
+    }
+    return { launches: rows, extra, raw: view };
+  }
+
+  async claim(w: WalletRow, owed: WalletOwed, to?: string): Promise<ClaimOut> {
+    const account = this.account(w);
+    const plan = planEvmClaimAllV2({ floorAmm: this.cfg.floorAmm, wallet: account.address, owed: owed.raw as Parameters<typeof planEvmClaimAllV2>[0]["owed"], payoutTo: to });
+    const quotes = this.claimQuotes(owed.launches.map((x) => x.launch));
+    const tokens = owed.launches.filter((x) => x.owed.teamBuy > 0n || x.owed.shareBought > 0n).map((x) => x.launch.token);
+    const [qBefore, tBefore] = await Promise.all([Promise.all(quotes.map((q) => this.balanceOf(q, account.address))), Promise.all(tokens.map((t) => this.balanceOf(t, account.address)))]);
+    const txs: string[] = [];
+    let gas = 0n;
+    let error: string | undefined;
+    try {
+      for (const call of [...plan.claims.map((c) => c.call), ...plan.payouts.map((p) => p.call)]) {
+        const rc = await this.send(account, call);
+        txs.push(rc.transactionHash);
+        gas += rc.gasUsed * rc.effectiveGasPrice;
+      }
+    } catch (e) {
+      error = (e as Error).message;
+    }
+    const [qAfter, tAfter] = await Promise.all([Promise.all(quotes.map((q) => this.balanceOf(q, account.address))), Promise.all(tokens.map((t) => this.balanceOf(t, account.address)))]);
+    const claimed = quotes
+      .map((q, i) => ({ asset: q, amount: qAfter[i]! - qBefore[i]! + (q === NATIVE ? gas : 0n) }))
+      .filter((x) => x.amount !== 0n);
+    return { txs, claimed, tokens: tAfter.reduce((t, x, i) => t + (x - tBefore[i]!), 0n), ...(error ? { error } : {}) };
+  }
+
+  // ---- Team Slot -------------------------------------------------------------------------------------------------------
+
+  async teamSlotAdd(w: WalletRow, l: LaunchRef, member: SlotMember, shares: bigint): Promise<string> {
+    const rc = await this.send(this.account(w), teamSlotAddCallV2({ floorAmm: this.cfg.floorAmm, launchId: l.launchId, member, shares }));
+    return rc.transactionHash;
+  }
+
+  async teamShareOwed(w: WalletRow, l: LaunchRef): Promise<bigint> {
+    const a = this.account(w).address;
+    const data = await this.ethCall({ to: this.cfg.floorAmm, data: viewCall("teamShareOf", [l.launchId, a]), value: 0n }, a);
+    return decodeTeamShareOf(data).claimable;
+  }
+
+  async teamShareBuy(w: WalletRow, l: LaunchRef, amountIn: bigint, slippageBps: number): Promise<TradeOut> {
+    const account = this.account(w);
+    const out = await this.quoteBuy(l, amountIn, account.address);
+    const minOut = (out * BigInt(10_000 - slippageBps)) / 10_000n;
+    const rc = await this.send(account, teamShareBuyCallV2({ floorAmm: this.cfg.floorAmm, launchId: l.launchId, amountIn, minOut }));
+    const ev = decodeFloorLogs(rc.logs.map((x) => ({ address: x.address, topics: x.topics as string[], data: x.data })), [this.cfg.floorAmm]).find((e) => e.name === "TeamShareBought");
+    return { tx: rc.transactionHash, quote: (ev?.args.spent as bigint | undefined) ?? amountIn, tokens: (ev?.args.tokens as bigint | undefined) ?? out };
   }
 
   async buyWith(account: LocalAccount, l: LaunchRef, amountIn: bigint, slippageBps: number, ahead = 0n): Promise<{ receipt: TransactionReceipt; spent: bigint; tokens: bigint }> {

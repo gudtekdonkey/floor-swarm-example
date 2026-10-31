@@ -6,7 +6,7 @@
 // A wSOL-quoted launch is traded in SOL: the buy wraps what it spends into the wallet's wSOL account and closes it after (the
 // refund and the rent come back as SOL); the sell closes it the same way. The chain's `native` is the wSOL mint.
 import { allowSolana, type SolanaChainConfig } from "./config.ts";
-import { RETRYABLE, SendError, type Chain, type Keys, type LaunchArgsOnChain, type Launcher, type LaunchRef, type QuoteInfo, type TradeOut } from "./chain.ts";
+import { RETRYABLE, SendError, type Chain, type ClaimOut, type CreatedLaunch, type ExtraOwed, type Keys, type LaunchArgsOnChain, type Launcher, type LaunchRef, type OwedLaunch, type QuoteInfo, type SlotMember, type TradeOut, type WalletOwed } from "./chain.ts";
 import type { WalletRow } from "../store/db.ts";
 import type { SolSigner } from "../vault/sol-keys.ts";
 import { base58Decode, base58Encode, concatBytes, readUintLE, uintLE } from "../../vendor/floor-sdk/codec.ts";
@@ -30,6 +30,11 @@ import { minOutAt } from "../../vendor/floor-sdk/v2/press.ts";
 import { createSolanaClient } from "../../vendor/floor-sdk/client/solana/index.ts";
 import type { FloorClient } from "../../vendor/floor-sdk/client/types.ts";
 import { planTeamBuy, rowOf } from "./teambuy.ts";
+import { holderBookPda, holderPositionPda, teamShareBuyInstructionV2 } from "../../vendor/floor-sdk/v2/solana.ts";
+import { holderOwedNowV2, launchOwedV2, planClaimAllV2, type LaunchOwedV2 } from "../../vendor/floor-sdk/v2/claims.ts";
+import { teamSlotAddMemberV2 } from "../../vendor/floor-sdk/v2/tx/solana.ts";
+import { refOwedPda, teamSlotPda } from "../../vendor/floor-sdk/solana/floor/program.ts";
+import { decodeRefOwed } from "../../vendor/floor-sdk/solana/floor/accounts.ts";
 
 const METAPLEX = "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s";
 // what a wallet keeps for its sends: fees, the launch token account's rent (Token-2022, ~0.0021 SOL), the wSOL account's
@@ -395,6 +400,148 @@ export class SolanaChain implements Chain {
         return { launchId: ev ? BigInt(ev.fields.id) : null, token: m.baseMint, tx: sig, paid: pays };
       },
     };
+  }
+
+  // ---- snipe -----------------------------------------------------------------------------------------------------------
+
+  /** The program's newest signature now ("" when it has none): the creates after it are the ones `nextLaunch` finds. */
+  async createsMark(): Promise<string> {
+    const r = await this.rpc<{ signature: string }[]>("getSignaturesForAddress", [this.cfg.programId, { limit: 1, commitment: "confirmed" }]);
+    return r[0]?.signature ?? "";
+  }
+
+  /** Polls the program's new transactions for `LaunchCreatedV2` events (the create's event CPI) until one is accepted. */
+  async nextLaunch(since: string, accept: (c: CreatedLaunch) => boolean, deadline: number): Promise<CreatedLaunch | null> {
+    let until: string | undefined = since || undefined;
+    const text = (b: Uint8Array): string => Buffer.from(b).toString("utf8").replace(/\0+$/, "").trim();
+    for (;;) {
+      const sigs: { signature: string; err: unknown }[] = await this.rpc("getSignaturesForAddress", [this.cfg.programId, { ...(until ? { until } : {}), limit: 1000, commitment: "confirmed" }]);
+      if (sigs.length > 0) {
+        until = sigs[0]!.signature;
+        for (const sg of [...sigs].reverse()) {
+          if (sg.err) continue;
+          const ev = (await this.events(sg.signature)).find((e) => e.name === "LaunchCreatedV2");
+          if (!ev) continue;
+          let launch: LaunchRef | null = null;
+          for (let i = 0; i < 5 && !launch; i++) {
+            launch = await this.resolveToken(ev.fields.mint as string);
+            if (!launch) await sleep(POLL_MS);
+          }
+          if (!launch) continue;
+          const c: CreatedLaunch = { launch, creator: ev.fields.creator as string, name: text(ev.fields.name as Uint8Array), symbol: text(ev.fields.symbol as Uint8Array) };
+          if (accept(c)) return c;
+        }
+      }
+      if (Date.now() >= deadline) return null;
+      await sleep(Math.max(0, Math.min(POLL_MS, deadline - Date.now())));
+    }
+  }
+
+  // ---- claim -----------------------------------------------------------------------------------------------------------
+
+  async owedOf(w: WalletRow, launches: readonly LaunchRef[]): Promise<WalletOwed> {
+    const wallet = this.signer(w).address;
+    const pid = this.ctx.programId;
+    const clock = await this.account(CLOCK_SYSVAR_ID);
+    const now = BigInt.asIntN(64, readUintLE(clock!.data, 32, 8));
+    const rows: LaunchOwedV2[] = [];
+    for (const l of launches) {
+      const launch = launchPda(l.token, pid)[0];
+      const slot = teamSlotPda(launch, pid)[0];
+      const pos = holderPositionPda(launch, wallet, this.ctx.hookProgramId)[0];
+      const book = holderBookPda(launch, this.ctx.hookProgramId)[0];
+      const [la, ts, pa, ba] = await this.accounts([launch, slot, pos, book]);
+      if (!la) throw new Error(`${l.token}'s launch account is gone`);
+      const holderOwed = pa && ba ? holderOwedNowV2({ positionData: pa.data, bookData: ba.data, balance: await this.balanceOf(l.token, wallet) }) : 0n;
+      rows.push(launchOwedV2({ wallet, launch, launchData: la.data, teamSlot: ts ? { address: slot, data: ts.data } : null, now, holderOwed }));
+    }
+    const refOwed: { quoteMint: string; quoteTokenProgram: string; owed: bigint }[] = [];
+    for (const r of rows) {
+      if (refOwed.some((x) => x.quoteMint === r.quoteMint)) continue;
+      const a = await this.account(refOwedPda(wallet, r.quoteMint, pid)[0]);
+      refOwed.push({ quoteMint: r.quoteMint, quoteTokenProgram: r.quoteTokenProgram, owed: a ? BigInt((decodeRefOwed(a.data) as any).owed) : 0n });
+    }
+    const owed: OwedLaunch[] = rows.map((r, i) => ({ launch: launches[i]!, owed: { creator: r.owed.creator, creatorRef: r.owed.creatorRef, teamSlot: r.owed.teamSlot, holder: r.owed.holder, teamBuy: r.owed.teamBuy, shareBought: r.owed.shareBought } }));
+    const extra: ExtraOwed[] = refOwed.filter((x) => x.owed > 0n).map((x) => ({ quote: x.quoteMint, kind: "traderRef", amount: x.owed }));
+    return { launches: owed, extra, raw: { launches: rows, refOwed } };
+  }
+
+  async claim(w: WalletRow, owed: WalletOwed, to?: string): Promise<ClaimOut> {
+    if (to) throw new SendError("--to: a Solana claim pays the wallet's own token accounts; there is no payout address to name", true);
+    const k = this.signer(w);
+    const raw = owed.raw as { launches: LaunchOwedV2[]; refOwed: { quoteMint: string; quoteTokenProgram: string; owed: bigint }[] };
+    const { value: bh } = await this.rpc<{ value: { blockhash: string } }>("getLatestBlockhash", [{ commitment: "confirmed" }]);
+    // a quote that is itself a launch's token pays through the hook
+    const quotes = [...new Set(raw.launches.map((r) => r.quoteMint))];
+    const launchQuotes: string[] = [];
+    for (const q of quotes) if (q !== WSOL_MINT && (await this.account(launchPda(q, this.ctx.programId)[0]))) launchQuotes.push(q);
+    const plan = planClaimAllV2({ wallet: k.address, launches: raw.launches, refOwed: raw.refOwed, recentBlockhash: bh.blockhash, launchQuotes, ...this.ctx });
+    const tokens = owed.launches.filter((x) => x.owed.teamBuy > 0n || x.owed.shareBought > 0n).map((x) => x.launch.token);
+    const read = (): Promise<bigint[]> => Promise.all([...quotes, ...tokens].map((a) => this.balanceOf(a, k.address)));
+    const before = await read();
+    const txs: string[] = [];
+    let fees = 0n;
+    let error: string | undefined;
+    try {
+      for (const t of plan.transactions) {
+        const sig = await this.send([k], t.instructions);
+        txs.push(sig);
+        fees += BigInt((await this.tx(sig).catch(() => null))?.meta?.fee ?? 0);
+      }
+    } catch (e) {
+      error = (e as Error).message;
+    }
+    const after = await read();
+    const claimed = quotes
+      .map((q, i) => ({ asset: q, amount: after[i]! - before[i]! + (q === WSOL_MINT ? fees : 0n) }))
+      .filter((x) => x.amount !== 0n);
+    return { txs, claimed, tokens: tokens.reduce((t, _, i) => t + (after[quotes.length + i]! - before[quotes.length + i]!), 0n), ...(error ? { error } : {}) };
+  }
+
+  // ---- Team Slot -------------------------------------------------------------------------------------------------------
+
+  async teamSlotAdd(w: WalletRow, l: LaunchRef, member: SlotMember, shares: bigint): Promise<string> {
+    const k = this.signer(w);
+    const s = await this.state(l);
+    const launch = launchPda(l.token, this.ctx.programId)[0];
+    const qp = (await this.mintOf(l.quote.address)).program;
+    const payerQuote = associatedTokenAddress(k.address, l.quote.address, qp);
+    const add = teamSlotAddMemberV2({
+      ...this.ctx,
+      payer: k.address,
+      launch,
+      teamSlot: teamSlotPda(launch, this.ctx.programId)[0],
+      quoteMint: l.quote.address,
+      payerQuote,
+      quoteVault: s.quoteVault,
+      quoteTokenProgram: qp,
+      baseMint: l.token,
+      member,
+      shares,
+    });
+    // the instruction names the payer's quote account even though nothing is paid: make sure it exists
+    return this.send([k], [computeUnitLimitInstruction(CU), createAssociatedTokenAccountIdempotentInstruction({ payer: k.address, owner: k.address, mint: l.quote.address, tokenProgram: qp }), add]);
+  }
+
+  async teamShareOwed(w: WalletRow, l: LaunchRef): Promise<bigint> {
+    const o = await this.owedOf(w, [l]);
+    return o.launches[0]!.owed.teamSlot;
+  }
+
+  async teamShareBuy(w: WalletRow, l: LaunchRef, amountIn: bigint, slippageBps: number): Promise<TradeOut> {
+    const k = this.signer(w);
+    const s = await this.state(l);
+    const launch = launchPda(l.token, this.ctx.programId)[0];
+    const out = quoteBuySolanaV2(s, amountIn).buy.tokens;
+    const minOut = (out * BigInt(10_000 - slippageBps)) / 10_000n;
+    const memberBase = associatedTokenAddress(k.address, l.token, TOKEN_2022_PROGRAM_ID);
+    const sig = await this.send([k], [
+      computeUnitLimitInstruction(CU),
+      createAssociatedTokenAccountIdempotentInstruction({ payer: k.address, owner: k.address, mint: l.token, tokenProgram: TOKEN_2022_PROGRAM_ID }),
+      teamShareBuyInstructionV2({ ...this.ctx, member: k.address, launch, baseMint: l.token, quoteMint: l.quote.address, tokenVault: s.tokenVault, quoteVault: s.quoteVault, memberBase, amountIn, minOut: minOut > 0n ? minOut : 1n }),
+    ]);
+    const ev = (await this.events(sig)).find((e) => e.name === "Trade");
+    return { tx: sig, quote: ev ? BigInt(ev.fields.quoteGross) - BigInt(ev.fields.refund ?? 0) : amountIn, tokens: ev ? BigInt(ev.fields.tokens) : out };
   }
 
   // ---- sending ---------------------------------------------------------------------------------------------------------

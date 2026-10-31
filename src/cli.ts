@@ -6,6 +6,10 @@ import { parseUnits } from "viem";
 import { Swarm, fmt, perWalletKey, WALLETS_KEY } from "./swarm.ts";
 import { buy, fund, sell, type Knobs } from "./commands/trade.ts";
 import { creators, launch } from "./commands/launch.ts";
+import { swap } from "./commands/swap.ts";
+import { parseWithin, snipe } from "./commands/snipe.ts";
+import { claim } from "./commands/claim.ts";
+import { parseMembers, parseShares, teamSlotAdd, teamSlotBuy } from "./commands/teamslot.ts";
 import { PlanError, type Count, type Pick, type Split } from "./plan/plan.ts";
 import type { Timing } from "./exec/run.ts";
 import type { WalletRow } from "./store/db.ts";
@@ -31,6 +35,18 @@ const USAGE = `swarm — drives many wallets through the FLOOR Program (testnets
   swarm launch <name> <SYMBOL> --chain c --from <id | group> [--preset 3] [--quote native|<asset>]
                [--team-buy <amount | max>] [--slippage BPS] [--times N] [--dry-run]
                                                       create launches; a group's wallets take turns
+  swarm swap <tokens | P%> <fromTarget> <toTarget> (--group g | --ids …) [knobs]
+                                                      each wallet sells its part of A, then buys B with what the sell returned
+                                                      (one chain, one quote asset)
+  swarm snipe <total> --chain c (--creator <addr> | --symbol SYM | --any) (--group g | --ids …) [--within SECS (600)] [knobs]
+                                                      wait for the next launch created on c that matches, then buy <total> of it
+  swarm claim [target | --all-launches] (--group g | --ids …) [--to <address>] [--dry-run]
+                                                      claim what the wallets are owed (Team Fees, Team Slot, holder, referrals,
+                                                      Team Buy); wallets owed nothing are skipped
+  swarm team-slot add <target> --from <creator id> (--member <0xaddr | wallet id | ids> | --handle <platform>:<handle>) --shares N
+                                                      the creator adds members to a launch's Team Slot
+  swarm team-slot buy <amount> <target> (--group g | --ids …) [knobs]
+                                                      members spend their owed Team Share on the token (claim brings the tokens)
   swarm runs [id]
 
 knobs:
@@ -121,6 +137,11 @@ export const COMMANDS = [
   { cmd: "buy", args: "<total> <target> (--group g | --ids …) [knobs]", does: "spread a buy of <total> quote across wallets", unlocks: true },
   { cmd: "sell", args: "<tokens | P%> <target> (--group g | --ids …) [knobs]", does: "sell tokens (or P % of each holding) across wallets", unlocks: true },
   { cmd: "launch", args: "<name> <SYMBOL> --chain c --from <id | group> [--preset 3] [--quote native|0x…] [--team-buy <amount | max>] [--times N] [--dry-run]", does: "create launches from the wallet(s) --from names; the Team Buy is priced from the chain's row", unlocks: true },
+  { cmd: "swap", args: "<tokens | P%> <fromTarget> <toTarget> (--group g | --ids …) [knobs]", does: "each picked wallet sells its part of launch A and buys launch B with what the sell returned (same chain and quote)", unlocks: true },
+  { cmd: "snipe", args: "<total> --chain c (--creator <addr> | --symbol SYM | --any) (--group g | --ids …) [--within SECS] [knobs]", does: "wait for the next launch created on the chain that matches the filter, then buy <total> of it across wallets (instant by default)", unlocks: true },
+  { cmd: "claim", args: "[target | --all-launches] (--group g | --ids …) [--to <address>] [--dry-run]", does: "claim what the wallets are owed on a launch (or every launch the swarm touched or made); wallets owed nothing are skipped", unlocks: true },
+  { cmd: "team-slot add", args: "<target> --from <creator id> (--member <0xaddr | wallet id | ids> | --handle <platform>:<handle>) --shares N [--dry-run]", does: "the creator wallet adds members to a launch's Team Slot", unlocks: true },
+  { cmd: "team-slot buy", args: "<amount> <target> (--group g | --ids …) [knobs]", does: "spend the wallets' owed Team Share on the launch's token (the tokens arrive with claim)", unlocks: true },
   { cmd: "runs", args: "[id]", does: "list runs, or one run's ledger", unlocks: false },
 ] as const;
 
@@ -154,6 +175,15 @@ const OPTIONS = {
   quote: { type: "string" },
   "slot-bps": { type: "string" },
   "team-buy": { type: "string" },
+  within: { type: "string" },
+  creator: { type: "string" },
+  symbol: { type: "string" },
+  any: { type: "boolean" },
+  "all-launches": { type: "boolean" },
+  to: { type: "string" },
+  member: { type: "string" },
+  handle: { type: "string" },
+  shares: { type: "string" },
   times: { type: "string" },
   "dry-run": { type: "boolean" },
   json: { type: "boolean" },
@@ -339,6 +369,45 @@ export async function main(argv: string[], log: (s: string) => void = console.lo
         dryRun: v["dry-run"],
       }, log);
       return { launches: made };
+    }
+    case "swap": {
+      if (!sub || !rest[0] || !rest[1]) throw new UsageError("swarm swap <tokens | P%> <fromTarget> <toTarget> (--group g | --ids …) [knobs]");
+      await unlock();
+      const [from, to] = [await s.resolve(rest[0]!), await s.resolve(rest[1]!)];
+      const amount = sub.endsWith("%") ? { pct: Number(sub.slice(0, -1)) } : parseUnits(sub, from.tokenDecimals);
+      return swap(s, from, to, selected(s, v), amount, knobs(v), log);
+    }
+    case "snipe": {
+      if (!sub || !v.chain) throw new UsageError("swarm snipe <total> --chain c (--creator <addr> | --symbol SYM | --any) (--group g | --ids …) [--within SECS]");
+      await unlock();
+      const k = knobs(v);
+      if (!v.instant && !v.random) k.timing = { kind: "instant" };
+      return snipe(s, { chain: v.chain, total: sub, filter: { creator: v.creator, symbol: v.symbol, any: v.any }, withinSecs: parseWithin(v.within) }, selected(s, v), k, log);
+    }
+    case "claim": {
+      if (!sub === !v["all-launches"]) throw new UsageError("swarm claim [target | --all-launches] (--group g | --ids …) [--to <address>]");
+      await unlock();
+      const target = sub ? await s.resolve(sub) : undefined;
+      return claim(s, { target, allLaunches: v["all-launches"], to: v.to, dryRun: v["dry-run"], seed: v.seed }, selected(s, v), log);
+    }
+    case "team-slot": {
+      if (sub === "add") {
+        if (!rest[0] || !v.from || !/^\d+$/.test(v.from)) throw new UsageError("swarm team-slot add <target> --from <creator wallet id> (--member <0xaddr | wallet id> | --handle <platform>:<handle>) --shares N");
+        await unlock();
+        const l = await s.resolve(rest[0]!);
+        const c = await s.chain(l.chain);
+        const creator = s.store.wallet(Number(v.from));
+        if (!creator) throw new Error(`no wallet ${v.from}`);
+        const specs = parseMembers({ member: v.member, handle: v.handle }, (id) => { const w = s.store.wallet(id); return w ? c.addressOf(w) : null; }, (x) => c.isAddress(x));
+        return teamSlotAdd(s, l, creator, specs, parseShares(v.shares), !!v["dry-run"], log);
+      }
+      if (sub === "buy") {
+        if (!rest[0] || !rest[1]) throw new UsageError("swarm team-slot buy <amount> <target> (--group g | --ids …) [knobs]");
+        await unlock();
+        const l = await s.resolve(rest[1]!);
+        return teamSlotBuy(s, l, selected(s, v), parseUnits(rest[0]!, l.quote.decimals), knobs(v), log);
+      }
+      throw new UsageError("swarm team-slot add … | swarm team-slot buy …");
     }
     case "runs": {
       if (sub) {
