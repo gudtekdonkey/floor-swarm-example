@@ -30,6 +30,7 @@ create table if not exists settings (key text primary key, value text not null);
 create table if not exists runs (id integer primary key, kind text not null, target text, spec text not null, seed text not null, status text not null, created integer not null, finished integer, report text);
 create table if not exists sends (run_id integer not null, wallet_id integer not null, wave integer not null, amount text not null, ok integer not null, tx text, error text, attempts integer not null, at integer not null);
 create table if not exists fills (wallet_id integer not null, target text not null, side text not null, quote text not null, tokens text not null, tx text not null, at integer not null);
+create table if not exists known_launches (target text not null, wallet_id integer not null, role text not null, at integer not null, primary key (target, wallet_id, role));
 create index if not exists fills_target on fills (target, wallet_id);
 create index if not exists sends_wallet on sends (wallet_id, at);
 `;
@@ -148,6 +149,19 @@ commit;`);
 
   touched(walletId: number, target: string): boolean {
     return this.db.prepare("select 1 from fills where wallet_id = ? and target = ? limit 1").get(walletId, target) !== undefined;
+  }
+
+  /** A launch the swarm made or put a wallet into the Team Slot of (`created` | `slot`), for `claim --all-launches`. */
+  noteLaunch(target: string, walletId: number, role: "created" | "slot"): void {
+    this.db.prepare("insert or ignore into known_launches (target, wallet_id, role, at) values (?, ?, ?, ?)").run(target, walletId, role, Date.now());
+  }
+
+  /** Every launch the swarm has touched (a fill) or made or joined, as `<chain>:<token>`, oldest first. */
+  knownTargets(): string[] {
+    const rows = this.db
+      .prepare("select target, min(at) as at from (select target, at from fills union all select target, at from known_launches) group by target order by at, target")
+      .all() as { target: string }[];
+    return rows.map((r) => r.target);
   }
 
   /** A wallet's position on a target from its own fills: tokens bought − sold, and the quote cost of what it still holds (average cost). */

@@ -42,12 +42,12 @@ export async function pool<T, R>(xs: readonly T[], n: number, f: (x: T) => Promi
   return out;
 }
 
-const targetKey = (l: LaunchRef): string => `${l.chain}:${l.family === "evm" ? l.token.toLowerCase() : l.token}`;
+export const targetKey = (l: { chain: string; family: string; token: string }): string => `${l.chain}:${l.family === "evm" ? l.token.toLowerCase() : l.token}`;
 
 /** The wallets with an address in this chain's family (an imported key is one family's). */
 const onChain = (c: Chain, ws: readonly WalletRow[]): WalletRow[] => ws.filter((w) => c.addressOf(w) !== null);
 
-async function run(
+export async function run(
   s: Swarm,
   kind: string,
   target: string | null,
@@ -76,7 +76,7 @@ async function run(
   return { runId, plan: p, report, unit };
 }
 
-const asSend = (f: (id: number, amount: bigint) => Promise<string>): Send => async (id, amount) => {
+export const asSend = (f: (id: number, amount: bigint) => Promise<string>): Send => async (id, amount) => {
   try {
     return { ok: true, tx: await f(id, amount) };
   } catch (e) {
@@ -85,7 +85,7 @@ const asSend = (f: (id: number, amount: bigint) => Promise<string>): Send => asy
   }
 };
 
-async function candidates(s: Swarm, c: Chain, l: LaunchRef, wallets: readonly WalletRow[], side: "buy" | "sell"): Promise<Candidate[]> {
+export async function candidates(s: Swarm, c: Chain, l: LaunchRef, wallets: readonly WalletRow[], side: "buy" | "sell"): Promise<Candidate[]> {
   const reserve = await c.gasReserve();
   const key = targetKey(l);
   return pool(onChain(c, wallets), 16, async (w) => {
@@ -105,7 +105,7 @@ async function candidates(s: Swarm, c: Chain, l: LaunchRef, wallets: readonly Wa
 }
 
 /** Only wallets that can take part are eligible (a wallet with no room would only fail its part). */
-const eligible = (cs: Candidate[]): Candidate[] => cs.filter((c) => c.cap > 0n);
+export const eligible = (cs: Candidate[]): Candidate[] => cs.filter((c) => c.cap > 0n);
 
 export async function buy(s: Swarm, l: LaunchRef, wallets: readonly WalletRow[], total: bigint, k: Knobs, log: Log): Promise<CommandResult> {
   const c = await s.chain(l.chain);
@@ -119,12 +119,10 @@ export async function buy(s: Swarm, l: LaunchRef, wallets: readonly WalletRow[],
   }), log);
 }
 
-/** `amount` is a token total, or `{ pct }`: each picked wallet sells that share of its own holding. */
-export async function sell(s: Swarm, l: LaunchRef, wallets: readonly WalletRow[], amount: bigint | { pct: number }, k: Knobs, log: Log): Promise<CommandResult> {
-  const c = await s.chain(l.chain);
+/** The plan of a sell: `amount` is a token total, or `{ pct }`: each picked wallet sells that share of its own holding. */
+export async function planSell(s: Swarm, c: Chain, l: LaunchRef, wallets: readonly WalletRow[], amount: bigint | { pct: number }, k: Knobs): Promise<Plan> {
   const cs = eligible(await candidates(s, c, l, wallets, "sell"));
   const td = l.tokenDecimals;
-  const tokenUnit = { symbol: "tokens", decimals: td };
   const show = (x: bigint): string => fmt(x, td, "tokens");
   const pick = k.pick ?? "holders";
   let p: Plan;
@@ -142,6 +140,14 @@ export async function sell(s: Swarm, l: LaunchRef, wallets: readonly WalletRow[]
   // a sell takes whole steps only (EVM: the contract refuses a tokensIn that is not a multiple of 10¹²)
   p = quantize(p, c.tokenStep);
   if (p.parts.length === 0) throw new PlanError(`nothing to sell: every part is under the chain's smallest amount (${show(c.tokenStep)})`);
+  return p;
+}
+
+/** `amount` is a token total, or `{ pct }`: each picked wallet sells that share of its own holding. */
+export async function sell(s: Swarm, l: LaunchRef, wallets: readonly WalletRow[], amount: bigint | { pct: number }, k: Knobs, log: Log): Promise<CommandResult> {
+  const c = await s.chain(l.chain);
+  const tokenUnit = { symbol: "tokens", decimals: l.tokenDecimals };
+  const p = await planSell(s, c, l, wallets, amount, k);
   const byId = new Map(wallets.map((w) => [w.id, w]));
   return run(s, "sell", targetKey(l), p, k, tokenUnit, asSend(async (id, tokensIn) => {
     const r = await c.sell(byId.get(id)!, l, tokensIn, k.slippageBps, k.timing.kind === "instant" ? p.total - tokensIn : 0n);

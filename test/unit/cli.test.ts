@@ -93,3 +93,27 @@ test("the knob parsers", () => {
   assert.deepEqual(parseSplit("balance"), { kind: "by_balance" });
   assert.throws(() => parseSplit("vibes"));
 });
+
+test("swap, snipe, claim and team-slot are listed and named in the usage", async () => {
+  const r = await json("help");
+  for (const c of ["swap", "snipe", "claim", "team-slot"]) {
+    assert.ok(r.body.result.commands.some((x: { cmd: string }) => x.cmd.startsWith(c)), c);
+    assert.ok(r.body.result.usage.includes(`swarm ${c}`), c);
+  }
+});
+
+test("swap, snipe, claim and team-slot with missing arguments name their usage (exit 3)", async () => {
+  for (const [argv, re] of [
+    [["swap", "10%"], /swarm swap/],
+    [["snipe", "1"], /swarm snipe/],
+    [["claim"], /swarm claim/],
+    [["team-slot"], /swarm team-slot/],
+    [["team-slot", "add", "fake:0x1"], /swarm team-slot add/],
+    [["team-slot", "buy", "1"], /swarm team-slot buy/],
+  ] as const) {
+    const r = await json(...argv);
+    assert.equal(r.code, 3, argv.join(" "));
+    assert.equal(r.body.error.kind, "usage");
+    assert.match(r.body.error.message, re, argv.join(" "));
+  }
+});
