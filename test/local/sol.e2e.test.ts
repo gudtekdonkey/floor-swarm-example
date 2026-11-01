@@ -89,8 +89,8 @@ test("fund → buy → sell on both launches", { skip }, async () => {
 test("launch: a group of creators takes turns on SOL, then the swarm trades it", { skip }, async () => {
   await sw("settings", "wallets", "1:24");
   await sw("wallets", "tag", "23-24", "creators");
-  // short of SOL: named before the press, nothing sent
-  await assert.rejects(main(["launch", "Short", "SHT", "--chain", "sol", "--from", "23", "--quote", "native"], () => {}), /wallet 23 \w+ doesn't have enough SOL to launch/);
+  // short of SOL: the row's whole Team Buy costs more than the 2 SOL each wallet holds; named before the press, nothing sent
+  await assert.rejects(main(["launch", "Short", "SHT", "--chain", "sol", "--from", "23", "--quote", "native", "--team-buy", "max"], () => {}), /wallet 23 \w+ doesn't have enough SOL to launch/);
   const need = (await main(["launch", "Dry", "DRY", "--chain", "sol", "--from", "23", "--quote", "native", "--dry-run"], () => {})) as { launches: { paid: bigint }[] };
   const each = Number(need.launches[0]!.paid * 2n + 1_000_000_000n) / 1e9;
   assert.match(last(await sw("fund", "--each", String(each), "--chain", "sol", "--from", "treasury", "--group", "creators", "--instant")), /fund done/);

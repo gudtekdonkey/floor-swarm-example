@@ -187,7 +187,7 @@ test("snipe: catches a launch created a few seconds after it starts", { skip }, 
   assert.ok(none.some((l) => /no launch matched symbol NEVER within 3 s/.test(l)), none.join("\n"));
 });
 
-test("claim and team-slot: the Team Buy unlocks, a claim pays it, a slot member is added", { skip }, async () => {
+test("claim and team-slot: members are added, the Team Buy unlocks split by their shares, a claim pays it once", { skip }, async () => {
   const w = world!;
   await freshPrices(w);
   // wallet 16 creates with the row's Team Buy, then the swarm trades it
@@ -209,16 +209,22 @@ test("claim and team-slot: the Team Buy unlocks, a claim pays it, a slot member 
   const s = new Swarm("e2e");
   const c = await s.chain("local");
   const creator = s.store.wallets({ ids: [16] })[0]!;
-  const tokensBefore = await c.balanceOf(tb.token, creator.evm!);
-  const dry = await sw("claim", target, "--ids", "16", "--dry-run");
-  assert.ok(dry.some((l) => /is owed: .*teamBuy/.test(l)), dry.join("\n"));
-  const done = await sw("claim", target, "--ids", "16,17,1", "--to", creator.evm!);
-  assert.ok(done.some((l) => /✓ wallet 16/.test(l)), done.join("\n"));
-  assert.ok(done.some((l) => /claim: 1 claimed, 2 owed nothing/.test(l)), done.join("\n"));
-  assert.ok((await c.balanceOf(tb.token, creator.evm!)) > tokensBefore, "the Team Buy tokens reached the wallet");
+  const [m3, m4] = s.store.wallets({ ids: [3, 4] });
+  const bal = async (x: { evm?: string | null }): Promise<bigint> => c.balanceOf(tb.token, x.evm!);
+  const [c0, a0, b0] = [await bal(creator), await bal(m3!), await bal(m4!)];
+  // the Team Buy is split by the slot's weights at unlock: members 3 and 4 hold every share, so each is owed half;
+  // the creator's place 0 (weight 0) keeps only the rounding dust, plus its Team Slot take in the quote
+  const dry = await sw("claim", target, "--ids", "3,4", "--dry-run");
+  assert.equal(dry.filter((l) => /is owed: .*teamBuy/.test(l)).length, 2, dry.join("\n"));
+  const done = await sw("claim", target, "--ids", "16,3,4,17");
+  for (const id of [16, 3, 4]) assert.ok(done.some((l) => new RegExp(`✓ wallet ${id}\\b`).test(l)), done.join("\n"));
+  assert.ok(done.some((l) => /claim: 3 claimed, 1 owed nothing/.test(l)), done.join("\n"));
+  const [ga, gb, gc] = [(await bal(m3!)) - a0, (await bal(m4!)) - b0, (await bal(creator)) - c0];
+  assert.ok(ga > 0n && ga === gb, `members 3 and 4 get equal halves (${ga}, ${gb})`);
+  assert.ok(gc >= 0n && gc * 1_000_000n < ga, `the creator gets only dust of the Team Buy (${gc})`);
   // claimed once: the next claim finds nothing owed
-  const again = await sw("claim", target, "--ids", "16");
-  assert.ok(again.some((l) => /claim: 0 claimed, 1 owed nothing/.test(l)), again.join("\n"));
+  const again = await sw("claim", target, "--ids", "16,3,4");
+  assert.ok(again.some((l) => /claim: 0 claimed, 3 owed nothing/.test(l)), again.join("\n"));
   // --all-launches reads every launch the swarm made or traded
   const all = await sw("claim", "--all-launches", "--group", "swarm", "--dry-run");
   assert.ok(all.some((l) => /launches/.test(l)), all.join("\n"));
