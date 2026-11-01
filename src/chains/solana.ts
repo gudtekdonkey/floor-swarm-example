@@ -1,4 +1,4 @@
-// The Solana adapter: floor_amm v2 through the vendored @floor/sdk (its Solana client builds every trade: the hook's accounts,
+// The Solana adapter: floor_amm v2 through the vendored @floorlaunchpad/sdk (its Solana client builds every trade: the hook's accounts,
 // the holder position, wSOL; plus the v2 create, PDAs, account decoders, the v0 compiler and the v2 event-CPI decoder), plain
 // JSON-RPC over fetch, and ed25519 from Node's crypto
 // (`vault/sol-keys.ts`). No web3.js, no new dependency.

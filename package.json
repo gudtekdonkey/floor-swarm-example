@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Drives hundreds of wallets through the FLOOR Program with @floor/sdk: the testnet soak harness",
+  "description": "Drives hundreds of wallets through the FLOOR Program with @floorlaunchpad/sdk: the testnet soak harness",
   "bin": {
     "swarm": "./bin/swarm.mjs"
   },

@@ -1,4 +1,4 @@
-// The EVM adapter: reads through the vendored @floor/sdk's call builders and decoders, signs with the vault's accounts, sends
+// The EVM adapter: reads through the vendored @floorlaunchpad/sdk's call builders and decoders, signs with the vault's accounts, sends
 // through a per-address nonce lane, and decodes FloorAmm's reverts by name.
 import { createPublicClient, http, type PublicClient, type Hex, type TransactionReceipt } from "viem";
 import type { LocalAccount } from "viem/accounts";

@@ -1,6 +1,6 @@
 # floor-swarm
 
-Drives many wallets at once through the FLOOR Program with `@floor/sdk`: buy, sell and fund across tens or hundreds of
+Drives many wallets at once through the FLOOR Program with `@floorlaunchpad/sdk`: buy, sell and fund across tens or hundreds of
 wallets, with the amount spread by rules you set (Count · Pick · Split), timing that is instant or random, retries, and a
 ledger of every send. It is a soak harness for testnets and local chains, and a working example of the SDK.
 
@@ -274,10 +274,10 @@ Every command takes `--json` and then prints exactly one JSON object on stdout, 
 | `src/cli.ts` | The command line and its `--json` envelope |
 | `src/plan/` | The planner (Count · Pick · Split, the bounded split) and the seeded random source |
 | `src/exec/` | The executor: timing, retries, re-routing a failed share |
-| `src/chains/` | Which chains are allowed, and the EVM adapter on `@floor/sdk` |
+| `src/chains/` | Which chains are allowed, and the EVM adapter on `@floorlaunchpad/sdk` |
 | `src/vault/`, `src/store/` | The encrypted vault and the ledger |
 | `src/commands/` | `buy`, `sell`, `fund` |
-| `vendor/floor-sdk/` | A pinned copy of `@floor/sdk` |
+| `vendor/floor-sdk/` | A pinned copy of `@floorlaunchpad/sdk` |
 | `scripts/local-evm.sh` | The local anvil world |
 | `test/unit/`, `test/local/` | Unit tests, and end-to-end tests against the local world |
 
