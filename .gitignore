@@ -1,0 +1,21 @@
+/vault/
+*.vault
+node_modules/
+data/
+.env*
+.work/
+# key material and local state: never commit
+*.txt
+!THIRD_PARTY.txt
+wallets.json
+keys/
+**/keys/
+*.key
+*.keys
+*.pem
+*-keypair.json
+state/
+*.state
+*.state.json
+*.db
+*.db-*

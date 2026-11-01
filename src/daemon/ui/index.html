@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>floor-swarm</title>
+<style>
+:root {
+  --bg: #000000;
+  --panel: #101113;
+  --panel2: #16181B;
+  --text: #F4F5F7;
+  --muted: #8A94A3;
+  --accent: #FF6A1A;
+  --line: #23262b;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.45 var(--sans); }
+body { min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
+button, input, select, textarea { font: inherit; color: var(--text); }
+input, select, textarea { background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 6px 8px; min-height: 32px; width: 100%; }
+input:focus, select:focus, textarea:focus, button:focus-visible { outline: 1px solid var(--accent); outline-offset: 0; }
+button { background: var(--panel2); border: 1px solid var(--line); border-radius: 3px; padding: 6px 12px; min-height: 32px; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 600; }
+button.primary:disabled { opacity: .35; cursor: not-allowed; }
+button.link { background: none; border: 0; color: var(--muted); padding: 2px 6px; min-height: 0; text-decoration: underline; }
+.mono, td.mono, pre, code { font-family: var(--mono); }
+.muted { color: var(--muted); }
+.acc { color: var(--accent); }
+h2 { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0; font-weight: 600; }
+
+/* top bar */
+header { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 8px 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.brand { font-family: var(--mono); font-weight: 700; letter-spacing: .04em; }
+.brand b { color: var(--accent); }
+.target { flex: 1 1 320px; display: flex; gap: 6px; min-width: 0; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { font-family: var(--mono); font-size: 11px; border: 1px solid var(--line); border-radius: 3px; padding: 2px 6px; color: var(--muted); background: var(--bg); }
+.chip.on { color: var(--text); border-color: var(--accent); }
+.spacer { flex: 1 1 0; }
+#resolved { width: 100%; font-family: var(--mono); font-size: 12px; color: var(--muted); padding: 0 16px 6px; background: var(--panel); border-bottom: 1px solid var(--line); display: none; overflow-wrap: anywhere; }
+
+/* main layout */
+main { flex: 1; display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 12px; padding: 12px 16px; align-items: start; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; min-width: 0; }
+.panel > .head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.panel > .body { padding: 10px; }
+.scroll { overflow: auto; max-height: 520px; -webkit-overflow-scrolling: touch; }
+.bottom { grid-column: 1 / -1; }
+.bottom .scroll { max-height: 340px; }
+
+table { border-collapse: collapse; width: 100%; font-family: var(--mono); font-size: 12px; }
+th { text-align: left; color: var(--muted); font-weight: 500; padding: 4px 8px; position: sticky; top: 0; background: var(--panel); border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 4px 8px; border-bottom: 1px solid var(--panel2); white-space: nowrap; }
+tr.click { cursor: pointer; }
+tr.click:hover td { background: var(--panel2); }
+td.num, th.num { text-align: right; }
+td.wrap { white-space: normal; overflow-wrap: anywhere; }
+
+/* tabs */
+.tabs { display: flex; gap: 2px; overflow-x: auto; padding: 0 6px; border-bottom: 1px solid var(--line); scrollbar-width: thin; }
+.tab { background: none; border: 0; border-bottom: 2px solid transparent; border-radius: 0; color: var(--muted); padding: 8px 10px; white-space: nowrap; }
+.tab.on { color: var(--text); border-bottom-color: var(--accent); }
+
+/* form */
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.grid .full { grid-column: 1 / -1; }
+label { display: block; }
+label > span { display: block; color: var(--muted); font-size: 11px; margin-bottom: 2px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.argv { font-family: var(--mono); font-size: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 6px 8px; overflow-wrap: anywhere; color: var(--muted); }
+pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+#preview { min-height: 40px; background: var(--bg); border: 1px solid var(--line); border-radius: 3px; padding: 6px 8px; max-height: 180px; overflow: auto; }
+#log { background: var(--bg); padding: 8px; height: 300px; overflow: auto; border: 1px solid var(--line); border-radius: 3px; }
+.st-done { color: var(--muted); }
+.st-failed, .st-partial, .st-stopped { color: var(--accent); }
+.hint { color: var(--muted); font-size: 11px; }
+
+/* toasts */
+#toasts { position: fixed; top: 12px; right: 12px; display: flex; flex-direction: column; gap: 8px; z-index: 30; width: min(360px, calc(100vw - 24px)); }
+.toast { background: var(--panel2); border: 1px solid var(--line); border-left: 3px solid var(--muted); border-radius: 3px; padding: 8px 10px; box-shadow: 0 4px 16px #000; cursor: pointer; }
+.toast.warn, .toast.error { border-left-color: var(--accent); }
+.toast b { display: block; font-family: var(--mono); font-size: 12px; }
+
+/* modal */
+#modal { position: fixed; inset: 0; background: rgba(0,0,0,.8); display: none; align-items: center; justify-content: center; z-index: 40; padding: 16px; }
+#modal .box { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 16px; width: min(380px, 100%); display: grid; gap: 10px; }
+
+/* steps editor */
+.step { display: grid; grid-template-columns: minmax(0, 1fr) 120px 90px 90px 32px; gap: 6px; margin-bottom: 6px; }
+.pipe { border: 1px solid var(--line); border-radius: 3px; padding: 8px; margin-bottom: 8px; }
+
+@media (max-width: 900px) {
+  main { grid-template-columns: minmax(0, 1fr); padding: 8px 16px; }
+  .scroll { max-height: 360px; }
+  .step { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .step > :first-child { grid-column: 1 / -1; }
+  #toasts { top: auto; bottom: 12px; }
+}
+@media (max-width: 480px) {
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  header { gap: 6px 8px; }
+  button, input, select { min-height: 40px; }
+}
+</style>
+</head>
+<body>
+<header>
+  <span class="brand"><b>FLOOR</b> swarm</span>
+  <form class="target" id="targetForm" autocomplete="off">
+    <input id="targetIn" placeholder="paste a token address or chain:token" spellcheck="false" aria-label="target">
+    <button type="submit">Resolve</button>
+  </form>
+  <div class="chips" id="chains"></div>
+  <span class="spacer"></span>
+  <span class="muted mono" id="queueInfo"></span>
+  <button id="lockBtn" type="button">Locked</button>
+</header>
+<div id="resolved"></div>
+
+<main>
+  <section class="panel" id="walletsPanel">
+    <div class="head">
+      <h2>Wallets</h2>
+      <span class="muted mono" id="walletCount"></span>
+      <span class="spacer"></span>
+      <select id="gridChain" style="width:auto" aria-label="chain"></select>
+      <select id="gridGroup" style="width:auto" aria-label="group"></select>
+      <button id="useSel" type="button" title="put the ticked ids in the command">Use ticked</button>
+      <button id="refreshWallets" type="button">Refresh</button>
+    </div>
+    <div class="scroll"><table id="walletTable"></table></div>
+  </section>
+
+  <section class="panel" id="cmdPanel">
+    <div class="head">
+      <h2>Command</h2>
+      <span class="spacer"></span>
+      <select id="presetSel" style="width:auto;max-width:150px" aria-label="presets"></select>
+      <button id="presetApply" type="button">Apply</button>
+      <button id="presetSave" type="button">Save as…</button>
+      <button id="presetDel" type="button" class="link">remove</button>
+    </div>
+    <div class="tabs" id="cmdTabs"></div>
+    <div class="body">
+      <form id="cmdForm" autocomplete="off" class="grid"></form>
+      <div style="margin-top:10px" class="argv" id="argvLine"></div>
+      <div style="margin-top:8px"><div class="hint" style="margin-bottom:2px">Preview (dry run, nothing is sent)</div><pre id="preview" class="mono muted">—</pre></div>
+      <div class="row" style="margin-top:10px">
+        <button id="runBtn" class="primary" type="button">Run</button>
+        <span class="muted" id="runInfo"></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel bottom">
+    <div class="tabs" id="bTabs">
+      <button class="tab on" data-t="runs">Runs</button>
+      <button class="tab" data-t="log">Log</button>
+      <button class="tab" data-t="pipes">Pipelines</button>
+      <button class="tab" data-t="alerts">Alerts</button>
+    </div>
+    <div class="body" id="bBody"></div>
+  </section>
+</main>
+
+<div id="toasts" aria-live="polite"></div>
+<div id="modal"><form class="box" id="unlockForm">
+  <h2>Unlock the vault</h2>
+  <div class="hint" id="unlockNote">The passphrase stays in this process. Keys never leave it.</div>
+  <input id="pass" type="password" placeholder="passphrase" autocomplete="current-password" aria-label="passphrase">
+  <div class="acc" id="unlockErr"></div>
+  <div class="row"><button class="primary" type="submit">Unlock</button><button type="button" id="unlockCancel">Close</button></div>
+</form></div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const short = (a) => (a && a.length > 16 ? a.slice(0, 8) + "…" + a.slice(-6) : a || "");
+const ago = (t) => { if (!t) return ""; const s = Math.round((Date.now() - t) / 1000); return s < 60 ? s + "s" : s < 3600 ? Math.round(s / 60) + "m" : s < 86400 ? Math.round(s / 3600) + "h" : Math.round(s / 86400) + "d"; };
+
+function fmt(v, dec, max = 6) {
+  if (v === undefined || v === null || v === "") return "";
+  let n; try { n = BigInt(v); } catch { return String(v); }
+  const neg = n < 0n; if (neg) n = -n;
+  const base = 10n ** BigInt(dec);
+  let whole = (n / base).toString(), frac = (n % base).toString().padStart(dec, "0").slice(0, max).replace(/0+$/, "");
+  whole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return (neg ? "-" : "") + whole + (frac ? "." + frac : "");
+}
+
+async function api(path, opt = {}) {
+  const r = await fetch(path, { method: opt.method || "GET", headers: opt.body ? { "content-type": "application/json" } : {}, body: opt.body ? JSON.stringify(opt.body) : undefined, credentials: "same-origin" });
+  let j = null; try { j = await r.json(); } catch {}
+  if (r.status === 401) { toast({ level: "error", title: "Session ended", text: "Open the URL the daemon printed again." }); throw new Error("401"); }
+  if (!r.ok) { const e = new Error((j && j.error) || r.statusText); e.status = r.status; throw e; }
+  return j;
+}
+
+const S = { state: null, commands: [], cmd: "buy", vals: {}, wallets: null, target: null, presets: [], pipelines: [], runs: [], pruns: [], btab: "runs", logLines: [], sel: new Set(), openRun: null, alerts: null, steps: [{ argv: "", when: "after", val: "", fail: "stop" }] };
+
+/* ---------- toasts and notifications ---------- */
+function toast(a) {
+  const d = document.createElement("div");
+  d.className = "toast " + (a.level || "ok");
+  d.innerHTML = "<b>" + esc(a.title) + "</b><span class='muted'>" + esc(a.text || "") + "</span>";
+  d.onclick = () => d.remove();
+  $("toasts").prepend(d);
+  setTimeout(() => d.remove(), 9000);
+}
+function notify(a) {
+  try { if ("Notification" in window && Notification.permission === "granted") new Notification(a.title, { body: a.text }); } catch {}
+}
+function askNotify() { try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission().then(renderBottom); } catch {} }
+
+/* ---------- state ---------- */
+async function loadState() {
+  S.state = await api("/api/state");
+  const st = S.state;
+  $("chains").innerHTML = Object.entries(st.chains).map(([n, c]) => `<span class="chip ${S.target && S.target.chain === n ? "on" : ""}" title="${esc(c.rpcHost)}">${esc(n)} · ${esc(c.family === "evm" ? "evm " + c.chainId : "sol")}</span>`).join("") || '<span class="chip">no chains</span>';
+  $("lockBtn").textContent = !st.vault.exists ? "No vault" : st.vault.unlocked ? "Unlocked · lock" : "Locked · unlock";
+  $("lockBtn").className = st.vault.unlocked ? "" : "acc";
+  const q = st.queue; $("queueInfo").textContent = q.running || q.queued ? `${q.running} running · ${q.queued} queued` : "idle";
+  const gc = $("gridChain"), cur = gc.value;
+  gc.innerHTML = '<option value="">no balances</option>' + Object.keys(st.chains).map((n) => `<option>${esc(n)}</option>`).join("");
+  gc.value = cur && st.chains[cur] ? cur : (S.target ? S.target.chain : Object.keys(st.chains)[0] || "");
+  const gg = $("gridGroup"), cg = gg.value;
+  gg.innerHTML = '<option value="">all groups</option>' + Object.entries(st.groups).map(([g, n]) => `<option value="${esc(g)}">${esc(g)} (${n})</option>`).join("");
+  gg.value = st.groups[cg] ? cg : "";
+  renderForm();
+}
+
+async function loadWallets(fresh) {
+  const st = S.state; if (!st) return;
+  const chain = $("gridChain").value, group = $("gridGroup").value;
+  const p = new URLSearchParams();
+  if (chain) p.set("chain", chain);
+  if (group) p.set("group", group);
+  if (chain && S.target && S.target.chain === chain) p.set("token", S.target.token);
+  if (fresh) p.set("fresh", "1");
+  $("walletCount").textContent = "loading…";
+  try { S.wallets = await api("/api/wallets?" + p); } catch (e) { S.wallets = null; $("walletTable").innerHTML = `<tr><td class="acc wrap">${esc(e.message)}</td></tr>`; $("walletCount").textContent = ""; return; }
+  renderWallets();
+}
+
+function renderWallets() {
+  const w = S.wallets; if (!w) return;
+  const c = w.chain, t = w.token;
+  $("walletCount").textContent = w.wallets.length + " wallets";
+  const head = `<tr><th></th><th class="num">id</th><th>address</th>${c ? `<th class="num">${esc(c.nativeSymbol)}</th>` : ""}${t ? `<th class="num">${esc(t.symbol)}</th>` : ""}<th>groups</th></tr>`;
+  const rows = w.wallets.map((x) => `<tr>
+    <td><input type="checkbox" data-id="${x.id}" ${S.sel.has(x.id) ? "checked" : ""} style="width:auto;min-height:0" aria-label="select ${x.id}"></td>
+    <td class="num">${x.id}</td><td title="${esc(x.address)}">${esc(short(x.address))}</td>
+    ${c ? `<td class="num">${x.error ? `<span class="acc" title="${esc(x.error)}">error</span>` : esc(fmt(x.native, c.nativeDecimals))}</td>` : ""}
+    ${t ? `<td class="num">${x.error ? "" : esc(fmt(x.tokenBalance, t.decimals))}</td>` : ""}
+    <td class="muted">${esc((x.groups || []).join(", "))}</td></tr>`).join("");
+  $("walletTable").innerHTML = head + (rows || '<tr><td colspan="6" class="muted">no wallets</td></tr>');
+}
+
+/* ---------- command form ---------- */
+const TRADE = ["buy", "sell", "fund", "launch"];
+const KNOBS = ["count", "pick", "split", "timing", "range", "retries", "slippage", "seed"];
+const F = {
+  amount: { label: "Amount", ph: "10" },
+  target: { label: "Target", ph: "chain:0x… (paste above)" },
+  each: { label: "Each (instead of total)", flag: "each", ph: "0.5" },
+  chain: { label: "Chain", flag: "chain", opts: () => [""].concat(Object.keys(S.state ? S.state.chains : {})) },
+  token: { label: "Token (asset)", flag: "token", ph: "0x… (blank: native)" },
+  from: { label: "From (treasury group or id)", flag: "from", ph: "treasury" },
+  group: { label: "Group", flag: "group", opts: () => [""].concat(Object.keys(S.state ? S.state.groups : {})) },
+  ids: { label: "Wallet ids", flag: "ids", ph: "1,2,5-9" },
+  count: { label: "Count", flag: "count", ph: "most:40", list: ["most", "most:40", "min", "exact:10", "random:5:20", "pct:50"] },
+  pick: { label: "Pick", flag: "pick", opts: ["", "random", "least_used", "fresh", "holders", "richest", "ordered"] },
+  split: { label: "Split", flag: "split", ph: "weights:0.2:1", list: ["weights:0.2:1", "balance", "equal"] },
+  timing: { label: "Timing", opts: ["", "instant", "random"] },
+  range: { label: "Random ms (min:max)", ph: "500:3000" },
+  retries: { label: "Retries", flag: "retries", ph: "3" },
+  slippage: { label: "Slippage bps", flag: "slippage", ph: "300" },
+  seed: { label: "Seed", flag: "seed", ph: "replays a plan" },
+  lname: { label: "Name", ph: "Moon" },
+  lsymbol: { label: "Symbol", ph: "MOON" },
+  preset: { label: "Launch preset", flag: "preset", ph: "3" },
+  quote: { label: "Quote", flag: "quote", ph: "native" },
+  teamBuy: { label: "Team Buy", flag: "team-buy", ph: "amount or max" },
+  times: { label: "Times", flag: "times", ph: "1" },
+  args: { label: "Arguments", ph: "" },
+};
+const SETS = {
+  buy: { pos: ["amount", "target"], keys: ["amount", "target", "group", "ids", ...KNOBS] },
+  sell: { pos: ["amount", "target"], keys: ["amount", "target", "group", "ids", ...KNOBS], label: "Tokens or P%" },
+  fund: { pos: ["amount"], keys: ["amount", "each", "chain", "token", "from", "group", "ids", ...KNOBS] },
+  launch: { pos: ["lname", "lsymbol"], keys: ["lname", "lsymbol", "chain", "from", "preset", "quote", "teamBuy", "times", "slippage"] },
+};
+const PRESET_FLAGS = ["count", "pick", "split", "instant", "random", "retries", "slippage", "seed", "group", "ids", "chain", "token", "from", "quote", "team-buy", "times"];
+
+function splitCommand(s) { return [...s.matchAll(/"([^"]*)"|'([^']*)'|(\S+)/g)].map((m) => m[1] ?? m[2] ?? m[3]); }
+
+function fieldHtml(k) {
+  const f = F[k], v = S.vals[k] ?? "";
+  let label = f.label; if (k === "amount" && S.cmd === "sell") label = SETS.sell.label; if (k === "amount" && S.cmd === "fund") label = "Total (or use Each)";
+  const wide = k === "args" || k === "target" ? " full" : "";
+  let inner;
+  if (f.opts) {
+    const o = typeof f.opts === "function" ? f.opts() : f.opts;
+    inner = `<select data-k="${k}">${o.map((x) => `<option value="${esc(x)}" ${x === v ? "selected" : ""}>${esc(x || "default")}</option>`).join("")}</select>`;
+  } else {
+    const dl = f.list ? ` list="dl-${k}"` : "";
+    inner = `<input data-k="${k}" value="${esc(v)}" placeholder="${esc(f.ph || "")}" spellcheck="false"${dl}>` + (f.list ? `<datalist id="dl-${k}">${f.list.map((x) => `<option value="${esc(x)}">`).join("")}</datalist>` : "");
+  }
+  return `<label class="${wide.trim()}" ${k === "range" && S.vals.timing !== "random" ? 'style="display:none"' : ""}><span>${esc(label)}</span>${inner}</label>`;
+}
+
+function renderTabs() {
+  const order = ["buy", "sell", "fund", "launch"];
+  const cmds = S.commands.map((c) => c.cmd);
+  const rest = cmds.filter((c) => !order.includes(c));
+  $("cmdTabs").innerHTML = order.concat(rest).filter((c) => cmds.includes(c)).map((c) => `<button class="tab ${c === S.cmd ? "on" : ""}" data-c="${esc(c)}">${esc(c)}</button>`).join("");
+}
+
+function renderForm() {
+  if (!S.commands.length) return;
+  const set = SETS[S.cmd];
+  const row = S.commands.find((c) => c.cmd === S.cmd);
+  let html;
+  if (set) html = set.keys.map(fieldHtml).join("");
+  else html = `<div class="full hint">${esc(row ? row.does : "")}<br><span class="mono">swarm ${esc(S.cmd)} ${esc(row ? row.args : "")}</span></div>` + fieldHtml("args");
+  $("cmdForm").innerHTML = html;
+  if (S.state) $("runBtn").disabled = false;
+  updateArgv();
+}
+
+function currentFlags(onlyPreset) {
+  const set = SETS[S.cmd]; if (!set) return [];
+  const out = [];
+  for (const k of set.keys) {
+    const f = F[k], v = (S.vals[k] || "").trim();
+    if (!v) continue;
+    if (k === "timing") { if (v === "instant") out.push("--instant"); continue; }
+    if (k === "range") { if (S.vals.timing === "random") out.push("--random", v); continue; }
+    if (f.flag) out.push("--" + f.flag, v);
+  }
+  return onlyPreset ? out.filter((t, i, a) => !t.startsWith("--") || PRESET_FLAGS.includes(t.slice(2))) : out;
+}
+
+function buildArgv() {
+  const set = SETS[S.cmd];
+  const words = S.cmd.split(" ");
+  if (!set) return words.concat(splitCommand(S.vals.args || ""));
+  const pos = set.pos.map((k) => (S.vals[k] || "").trim()).filter(Boolean);
+  return words.concat(pos, currentFlags(false));
+}
+
+function missing() {
+  const set = SETS[S.cmd]; if (!set) return null;
+  if (S.cmd === "buy" || S.cmd === "sell") { if (!S.vals.amount) return "amount"; if (!S.vals.target) return "target"; if (!S.vals.group && !S.vals.ids) return "group or ids"; }
+  if (S.cmd === "fund") { if (!S.vals.amount && !S.vals.each) return "total or each"; if (!S.vals.chain || !S.vals.from) return "chain and from"; if (!S.vals.group && !S.vals.ids) return "group or ids"; }
+  if (S.cmd === "launch") { if (!S.vals.lname || !S.vals.lsymbol || !S.vals.chain || !S.vals.from) return "name, symbol, chain and from"; }
+  return null;
+}
+
+let previewTimer = 0, previewSeq = 0;
+function updateArgv() {
+  $("argvLine").textContent = "swarm " + buildArgv().map((a) => (/\s/.test(a) ? JSON.stringify(a) : a)).join(" ");
+  clearTimeout(previewTimer);
+  if (!TRADE.includes(S.cmd)) { $("preview").textContent = "No preview for this command."; return; }
+  const m = missing();
+  if (m) { $("preview").textContent = "Fill in: " + m; return; }
+  if (!S.state || !S.state.vault.unlocked) { $("preview").textContent = "Unlock the vault to preview."; return; }
+  previewTimer = setTimeout(preview, 450);
+}
+
+async function preview() {
+  const seq = ++previewSeq; $("preview").textContent = "…";
+  try {
+    const r = await api("/api/preview", { method: "POST", body: { argv: buildArgv() } });
+    if (seq !== previewSeq) return;
+    if (!r.ok) { $("preview").innerHTML = `<span class="acc">${esc(r.error.message)}</span>`; return; }
+    $("preview").textContent = (r.log || []).join("\n") || "ok";
+  } catch (e) { if (seq === previewSeq) $("preview").innerHTML = `<span class="acc">${esc(e.message)}</span>`; }
+}
+
+async function run() {
+  const m = missing(); if (m) return toast({ level: "warn", title: "Missing", text: m });
+  const argv = buildArgv();
+  if (TRADE.includes(S.cmd) && !argv.includes("--dry-run") && !confirm("Send this? It signs and sends real transactions on the chain.\n\nswarm " + argv.join(" "))) return;
+  try {
+    const r = await api("/api/run", { method: "POST", body: { argv } });
+    $("runInfo").textContent = r.job ? `job ${r.job} queued` : "pipeline run " + r.pipelineRun;
+    S.btab = "log"; renderBottom(); loadState();
+  } catch (e) { toast({ level: "error", title: "Not run", text: e.message }); }
+}
+
+/* ---------- presets ---------- */
+async function loadPresets() { S.presets = await api("/api/presets"); $("presetSel").innerHTML = '<option value="">presets</option>' + S.presets.map((p) => `<option>${esc(p.name)}</option>`).join(""); }
+function applyPreset() {
+  const p = S.presets.find((x) => x.name === $("presetSel").value); if (!p) return;
+  if (!SETS[S.cmd]) return toast({ level: "warn", title: "Presets", text: "Pick buy, sell, fund or launch first." });
+  for (let i = 0; i < p.flags.length; i++) {
+    const t = p.flags[i]; if (!t.startsWith("--")) continue;
+    const eq = t.indexOf("="), name = (eq > 0 ? t.slice(2, eq) : t.slice(2)), val = eq > 0 ? t.slice(eq + 1) : p.flags[i + 1];
+    if (name === "instant") S.vals.timing = "instant";
+    else if (name === "random") { S.vals.timing = "random"; S.vals.range = val; }
+    else { const key = Object.keys(F).find((k) => F[k].flag === name); if (key) S.vals[key] = val; }
+  }
+  if (p.amount && (S.cmd === "buy")) S.vals.amount = p.amount;
+  renderForm();
+}
+async function savePreset() {
+  const flags = currentFlags(true);
+  const name = prompt("Preset name (letters, digits, - and _)"); if (!name) return;
+  try { await api("/api/presets", { method: "POST", body: { name, flags, amount: S.cmd === "buy" ? S.vals.amount || "" : "" } }); toast({ level: "ok", title: "Preset saved", text: name }); await loadPresets(); $("presetSel").value = name; }
+  catch (e) { toast({ level: "error", title: "Not saved", text: e.message }); }
+}
+async function delPreset() {
+  const n = $("presetSel").value; if (!n || !confirm("Remove preset " + n + "?")) return;
+  await api("/api/presets/" + encodeURIComponent(n), { method: "DELETE" }); loadPresets();
+}
+
+/* ---------- bottom panel ---------- */
+const statusCls = (s) => "st-" + (s || "").replace(/[^a-z]/g, "");
+
+async function loadRuns() { S.runs = await api("/api/runs?limit=50"); if (S.btab === "runs") renderBottom(); }
+async function loadPipes() { [S.pipelines, S.pruns] = await Promise.all([api("/api/pipelines"), api("/api/pipeline-runs")]); if (S.btab === "pipes") renderBottom(); }
+async function loadAlerts() { S.alerts = await api("/api/alerts"); if (S.btab === "alerts") renderBottom(); }
+
+function renderBottom() {
+  for (const b of document.querySelectorAll("#bTabs .tab")) b.classList.toggle("on", b.dataset.t === S.btab);
+  const el = $("bBody");
+  if (S.btab === "runs") {
+    const rows = S.runs.map((r) => `<tr class="click" data-run="${r.id}"><td class="num">${r.id}</td><td>${esc(r.kind)}</td><td class="wrap">${esc(short(r.target || ""))}</td><td class="${statusCls(r.status)}">${esc(r.status)}</td><td class="muted">${ago(r.created)} ago</td></tr>`).join("");
+    el.innerHTML = `<div class="scroll"><table><tr><th class="num">run</th><th>kind</th><th>target</th><th>status</th><th>when</th></tr>${rows || '<tr><td colspan="5" class="muted">no runs yet</td></tr>'}</table></div><div id="runDetail"></div>`;
+    if (S.openRun) showRun(S.openRun);
+  } else if (S.btab === "log") {
+    el.innerHTML = `<div class="row" style="margin-bottom:6px"><span class="hint">Live output of queued commands.</span><span class="spacer"></span><button class="link" id="clearLog" type="button">clear</button></div><pre id="log" class="mono">${esc(S.logLines.join("\n"))}</pre>`;
+    const l = $("log"); l.scrollTop = l.scrollHeight;
+    $("clearLog").onclick = () => { S.logLines = []; renderBottom(); };
+  } else if (S.btab === "pipes") renderPipes(el);
+  else renderAlerts(el);
+}
+
+async function showRun(id) {
+  S.openRun = id;
+  let r; try { r = await api("/api/runs/" + id); } catch (e) { return; }
+  const d = $("runDetail"); if (!d) return;
+  const sends = (r.sends || []).map((s) => `<tr><td class="num">${s.wallet_id}</td><td class="num">${s.wave}</td><td class="num">${esc(s.amount)}</td><td class="${s.ok ? "st-done" : "st-failed"}">${s.ok ? "ok" : "failed"}</td><td class="wrap">${esc(s.tx || s.error || "")}</td><td class="num">${s.attempts}</td></tr>`).join("");
+  const pl = r.pipeline ? ` · pipeline ${esc(r.pipeline.name)} step ${r.pipeline.step + 1}` : "";
+  d.innerHTML = `<div class="row" style="margin:10px 0 4px"><h2>Run ${r.id} · ${esc(r.kind)} · ${esc(r.status)}${pl}</h2><span class="muted mono">seed ${esc(r.seed)}</span></div><div class="scroll"><table><tr><th class="num">wallet</th><th class="num">wave</th><th class="num">amount (base units)</th><th>result</th><th>tx / error</th><th class="num">tries</th></tr>${sends || '<tr><td colspan="6" class="muted">no sends</td></tr>'}</table></div>`;
+}
+
+function stepText(s) { return (s.when.kind === "wait" ? `wait ${s.when.seconds}s` : s.when.kind === "until_run_status" ? `until ${s.when.status}` : "after") + (s.onFail === "continue" ? " · continue on fail" : ""); }
+
+function renderPipes(el) {
+  const list = S.pipelines.map((p) => `<div class="pipe"><div class="row"><b class="mono">${esc(p.name)}</b><span class="muted">${p.steps.length} steps</span><span class="spacer"></span><button data-prun="${esc(p.name)}" type="button">Run</button><button data-pdel="${esc(p.name)}" class="link" type="button">remove</button></div>
+    <div class="mono muted" style="margin-top:4px">${p.steps.map((s, i) => `${i + 1}. ${esc(s.argv.join(" "))} <span class="hint">[${esc(stepText(s))}]</span>`).join("<br>")}</div></div>`).join("") || '<div class="muted">No pipelines yet.</div>';
+  const runs = S.pruns.map((r) => `<tr class="click" data-pr="${r.id}"><td class="num">${r.id}</td><td>${esc(r.name)}</td><td class="${statusCls(r.status)}">${esc(r.status)}</td><td class="muted">${ago(r.started)} ago</td><td>${r.status === "running" ? `<button data-pstop="${r.id}" type="button">Stop</button>` : ""}</td></tr>`).join("");
+  const steps = S.steps.map((s, i) => `<div class="step" data-i="${i}">
+    <input data-f="argv" value="${esc(s.argv)}" placeholder="buy 10 chain:0x… --group snipers" spellcheck="false" aria-label="step command">
+    <select data-f="when" aria-label="gate"><option ${s.when === "after" ? "selected" : ""}>after</option><option ${s.when === "wait" ? "selected" : ""}>wait</option><option ${s.when === "until_run_status" ? "selected" : ""}>until_run_status</option></select>
+    <input data-f="val" value="${esc(s.val)}" placeholder="${s.when === "wait" ? "seconds" : s.when === "until_run_status" ? "done" : ""}" ${s.when === "after" ? "disabled" : ""} aria-label="gate value">
+    <select data-f="fail" aria-label="on fail"><option ${s.fail === "stop" ? "selected" : ""}>stop</option><option ${s.fail === "continue" ? "selected" : ""}>continue</option></select>
+    <button data-sdel="${i}" type="button" aria-label="remove step">×</button></div>`).join("");
+  el.innerHTML = `<div class="grid" style="align-items:start"><div><h2 style="margin-bottom:6px">Saved</h2>${list}<h2 style="margin:12px 0 6px">Pipeline runs</h2><div class="scroll"><table><tr><th class="num">id</th><th>name</th><th>status</th><th>when</th><th></th></tr>${runs || '<tr><td colspan="5" class="muted">none</td></tr>'}</table></div><div id="prDetail"></div></div>
+  <div><h2 style="margin-bottom:6px">New pipeline</h2><label><span>Name</span><input id="pname" value="${esc(S.pname || "")}" placeholder="open-and-sell"></label><div style="margin-top:8px">${steps}</div>
+  <div class="row"><button id="addStep" type="button">Add step</button><button id="addCur" type="button" title="the command panel's command">Add current command</button><button id="savePipe" class="primary" type="button">Save</button></div>
+  <div class="hint" style="margin-top:6px">A step runs after the one before. wait: pause first. until_run_status: wait for the previous step's run to reach that status. Price gates are not built yet.</div></div></div>`;
+  if (S.openPr) showPr(S.openPr);
+}
+
+async function showPr(id) {
+  S.openPr = id; let r; try { r = await api("/api/pipeline-runs/" + id); } catch { return; }
+  const d = $("prDetail"); if (!d) return;
+  d.innerHTML = `<h2 style="margin:10px 0 4px">Pipeline run ${r.id} · ${esc(r.name)} · ${esc(r.status)}</h2><table>${r.steps.map((s) => `<tr><td class="num">${s.idx + 1}</td><td class="wrap">${esc(s.argv.join(" "))}</td><td class="${statusCls(s.status)}">${esc(s.status)}</td><td>${s.runId ? `<a href="#" data-gorun="${s.runId}" style="color:var(--accent)">run ${s.runId}</a>` : ""}</td><td class="wrap muted">${esc(s.error || "")}</td></tr>`).join("")}</table>`;
+}
+
+function readSteps() {
+  S.pname = ($("pname") || {}).value || S.pname;
+  const rows = document.querySelectorAll("#bBody .step");
+  S.steps = [...rows].map((r) => ({ argv: r.querySelector('[data-f="argv"]').value, when: r.querySelector('[data-f="when"]').value, val: r.querySelector('[data-f="val"]').value, fail: r.querySelector('[data-f="fail"]').value }));
+}
+
+function stepsToApi() {
+  return S.steps.filter((s) => s.argv.trim()).map((s) => {
+    const o = { argv: splitCommand(s.argv), on_fail: s.fail };
+    if (s.when === "wait") o.when = { kind: "wait", seconds: Number(s.val) };
+    else if (s.when === "until_run_status") o.when = { kind: "until_run_status", status: s.val || "done" };
+    return o;
+  });
+}
+
+function renderAlerts(el) {
+  const a = S.alerts || { webhook: false, recent: [] };
+  const perm = "Notification" in window ? Notification.permission : "unavailable";
+  el.innerHTML = `<div class="grid" style="align-items:start"><div>
+    <h2 style="margin-bottom:6px">Webhook</h2>
+    <div class="muted" style="margin-bottom:6px">${a.webhook ? "On: " + esc(a.host) : "Off."} ${a.lastError ? `<span class="acc">${esc(a.lastError)}</span>` : ""}</div>
+    <div class="row"><input id="hook" type="password" placeholder="https://… (Discord, Telegram or any URL)" autocomplete="off" aria-label="webhook url" style="flex:1 1 200px"><button id="hookSave" type="button">Set</button><button id="hookOff" type="button">Off</button><button id="hookTest" type="button">Test</button></div>
+    <div class="hint" style="margin-top:6px">Each alert is a POST of JSON with text, content and an alert object. No keys or paths are sent.</div>
+    <h2 style="margin:12px 0 6px">Browser notifications</h2>
+    <div class="row"><span class="muted">${esc(perm)}</span>${perm === "default" ? '<button id="notifyBtn" type="button">Enable</button>' : ""}</div></div>
+    <div><h2 style="margin-bottom:6px">Recent</h2>${(a.recent || []).slice().reverse().map((x) => `<div class="mono" style="margin-bottom:4px"><span class="${x.level === "ok" ? "muted" : "acc"}">${esc(x.title)}</span> <span class="muted">${esc(x.text)} · ${ago(x.at)} ago</span></div>`).join("") || '<div class="muted">None.</div>'}</div></div>`;
+}
+
+/* ---------- target ---------- */
+async function resolveTarget(t) {
+  const el = $("resolved");
+  try {
+    const l = await api("/api/target?t=" + encodeURIComponent(t));
+    S.target = l;
+    el.style.display = "block"; el.textContent = `${l.chain}:${l.token} · launch ${l.launchId} · quote ${l.quote.symbol} (${l.quote.address})`;
+    S.vals.target = `${l.chain}:${l.token}`;
+    $("gridChain").value = l.chain;
+    renderForm(); loadState(); loadWallets();
+  } catch (e) { S.target = null; el.style.display = "block"; el.innerHTML = `<span class="acc">${esc(e.message)}</span>`; }
+}
+
+/* ---------- unlock ---------- */
+function openModal(msg) { $("modal").style.display = "flex"; $("unlockErr").textContent = ""; $("unlockNote").textContent = msg || "The passphrase stays in this process. Keys never leave it."; $("pass").value = ""; setTimeout(() => $("pass").focus(), 30); }
+function closeModal() { $("modal").style.display = "none"; }
+
+/* ---------- events ---------- */
+let refreshTimer = 0;
+function later() { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => { loadRuns(); loadState(); loadWallets(true); loadPipes(); }, 300); }
+function connect() {
+  const es = new EventSource("/api/events");
+  es.onmessage = (m) => {
+    const e = JSON.parse(m.data);
+    if (e.type === "hello") { for (const a of e.alerts || []) {} return; }
+    if (e.type === "log") { S.logLines.push(`#${e.job} ${e.line}`); if (S.logLines.length > 3000) S.logLines.splice(0, 500); if (S.btab === "log") { const l = $("log"); if (l) { l.textContent += `#${e.job} ${e.line}\n`; l.scrollTop = l.scrollHeight; } } }
+    else if (e.type === "queued") { S.logLines.push(`#${e.job} queued: swarm ${e.argv.join(" ")}`); loadState(); }
+    else if (e.type === "start") S.logLines.push(`#${e.job} started`);
+    else if (e.type === "done") { S.logLines.push(`#${e.job} ${e.status}${e.result && e.result.error ? ": " + e.result.error.message : ""}`); if (S.btab === "log") renderBottom(); later(); }
+    else if (e.type === "alert") { toast(e.alert); notify(e.alert); loadAlerts(); }
+    else if (e.type === "pipeline") { loadPipes(); if (S.openPr === e.id) showPr(e.id); }
+  };
+}
+
+/* ---------- wiring ---------- */
+document.addEventListener("input", (ev) => {
+  const t = ev.target;
+  if (t.dataset && t.dataset.k) { S.vals[t.dataset.k] = t.value; if (t.dataset.k === "timing") renderForm(); else updateArgv(); }
+});
+document.addEventListener("change", (ev) => {
+  const t = ev.target;
+  if (t.dataset && t.dataset.k) { S.vals[t.dataset.k] = t.value; if (t.dataset.k === "timing") renderForm(); }
+  if (t.dataset && t.dataset.id) { const id = Number(t.dataset.id); t.checked ? S.sel.add(id) : S.sel.delete(id); }
+  if (t.dataset && t.dataset.f) { readSteps(); if (t.dataset.f === "when") renderBottom(); }
+});
+document.addEventListener("click", async (ev) => {
+  const t = ev.target.closest("button, tr, a"); if (!t) return;
+  const d = t.dataset;
+  if (d.c) { S.cmd = d.c; renderTabs(); renderForm(); }
+  else if (d.t) { S.btab = d.t; renderBottom(); if (d.t === "pipes") loadPipes(); if (d.t === "alerts") loadAlerts(); if (d.t === "runs") loadRuns(); }
+  else if (d.run) showRun(Number(d.run));
+  else if (d.gorun) { ev.preventDefault(); S.btab = "runs"; S.openRun = Number(d.gorun); renderBottom(); }
+  else if (d.pr) { showPr(Number(d.pr)); }
+  else if (d.pstop) { await api(`/api/pipeline-runs/${d.pstop}/stop`, { method: "POST" }); toast({ level: "ok", title: "Stopping", text: "after the step in flight" }); }
+  else if (d.prun) { try { const r = await api(`/api/pipelines/${encodeURIComponent(d.prun)}/run`, { method: "POST" }); S.openPr = r.pipelineRun; loadPipes(); } catch (e) { toast({ level: "error", title: "Not started", text: e.message }); } }
+  else if (d.pdel) { if (confirm("Remove pipeline " + d.pdel + "?")) { await api("/api/pipelines/" + encodeURIComponent(d.pdel), { method: "DELETE" }); loadPipes(); } }
+  else if (d.sdel !== undefined) { readSteps(); S.steps.splice(Number(d.sdel), 1); if (!S.steps.length) S.steps.push({ argv: "", when: "after", val: "", fail: "stop" }); renderBottom(); }
+  else if (t.id === "addStep") { readSteps(); S.steps.push({ argv: "", when: "after", val: "", fail: "stop" }); renderBottom(); }
+  else if (t.id === "addCur") { readSteps(); const a = buildArgv().join(" "); const e = S.steps.find((s) => !s.argv.trim()); if (e) e.argv = a; else S.steps.push({ argv: a, when: "after", val: "", fail: "stop" }); renderBottom(); }
+  else if (t.id === "savePipe") {
+    readSteps();
+    try { await api("/api/pipelines", { method: "POST", body: { name: S.pname || "", steps: stepsToApi() } }); toast({ level: "ok", title: "Pipeline saved", text: S.pname }); loadPipes(); }
+    catch (e) { toast({ level: "error", title: "Not saved", text: e.message }); }
+  }
+  else if (t.id === "hookSave") { try { S.alerts = { ...(await api("/api/alerts/webhook", { method: "POST", body: { url: $("hook").value } })), recent: (S.alerts || {}).recent }; renderBottom(); } catch (e) { toast({ level: "error", title: "Webhook", text: e.message }); } }
+  else if (t.id === "hookOff") { await api("/api/alerts/webhook", { method: "POST", body: { off: true } }); loadAlerts(); }
+  else if (t.id === "hookTest") { await api("/api/alerts/test", { method: "POST" }); loadAlerts(); }
+  else if (t.id === "notifyBtn") askNotify();
+});
+$("runBtn").onclick = run;
+$("presetApply").onclick = applyPreset;
+$("presetSave").onclick = savePreset;
+$("presetDel").onclick = delPreset;
+$("refreshWallets").onclick = () => loadWallets(true);
+$("gridChain").onchange = () => loadWallets();
+$("gridGroup").onchange = () => loadWallets();
+$("useSel").onclick = () => { if (!S.sel.size) return; S.vals.ids = [...S.sel].sort((a, b) => a - b).join(","); renderForm(); };
+$("targetForm").onsubmit = (e) => { e.preventDefault(); const t = $("targetIn").value.trim(); if (t) resolveTarget(t); };
+$("lockBtn").onclick = async () => {
+  const st = S.state; if (!st) return;
+  if (!st.vault.exists) return toast({ level: "warn", title: "No vault", text: "Run swarm init first." });
+  if (st.vault.unlocked) { await api("/api/lock", { method: "POST" }); await loadState(); loadWallets(); } else openModal();
+};
+$("unlockCancel").onclick = closeModal;
+$("unlockForm").onsubmit = async (e) => {
+  e.preventDefault();
+  try { await api("/api/unlock", { method: "POST", body: { passphrase: $("pass").value } }); $("pass").value = ""; closeModal(); askNotify(); await loadState(); loadWallets(); updateArgv(); }
+  catch (err) { $("unlockErr").textContent = err.message; }
+};
+
+(async function init() {
+  try {
+    S.commands = await api("/api/commands");
+    renderTabs();
+    await Promise.all([loadState(), loadRuns(), loadPresets(), loadPipes(), loadAlerts()]);
+    renderBottom();
+    connect();
+    await loadWallets();
+    if (S.state.vault.exists && !S.state.vault.unlocked) openModal();
+  } catch (e) { if (e.message !== "401") toast({ level: "error", title: "Could not load", text: e.message }); }
+})();
+</script>
+</body>
+</html>
