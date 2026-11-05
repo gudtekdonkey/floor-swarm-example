@@ -23,6 +23,10 @@ export interface ExplorerRow {
         url: string;
         query?: string;
     };
+    alt?: {
+        name: string;
+        url: string;
+    }[];
 }
 export interface ChainRow {
     name: ChainName;

@@ -478,6 +478,26 @@ export function setGenesisListRootInstruction(p: {
         throw new RangeError("setGenesisListRootInstruction: the root is 32 bytes");
     return ix("set_genesis_list_root", [RS(p.authority), R(p.config), W(p.genesisRaise)], (w) => w.bytes(p.listRoot), p);
 }
+export const GENESIS_NO_END = (1n << 63n) - 1n;
+export function startGenesisPublicInstruction(p: {
+    authority: string;
+    config?: string;
+    genesisRaise?: string;
+} & Ctx): Instruction {
+    const g = pid(p);
+    return ix("start_genesis_public", [RS(p.authority), R(p.config ?? configPda(g)[0]), W(p.genesisRaise ?? genesisRaisePda(g)[0])], none, p);
+}
+export function setGenesisEndInstruction(p: {
+    authority: string;
+    endsAt: bigint;
+    config?: string;
+    genesisRaise?: string;
+} & Ctx): Instruction {
+    if (p.endsAt < 0n || p.endsAt > GENESIS_NO_END)
+        throw new RangeError(`setGenesisEndInstruction: endsAt ${p.endsAt} is not an i64 ≥ 0`);
+    const g = pid(p);
+    return ix("set_genesis_end", [RS(p.authority), R(p.config ?? configPda(g)[0]), W(p.genesisRaise ?? genesisRaisePda(g)[0])], (w) => w.u64(p.endsAt), p);
+}
 export function setGenesisPresetInstruction(p: {
     authority: string;
     config: string;

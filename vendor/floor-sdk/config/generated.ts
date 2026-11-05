@@ -134,7 +134,13 @@ export const CHAIN_ROWS = [
             "url": "https://etherscan.io",
             "soak": {
                 "url": "https://sepolia.etherscan.io"
-            }
+            },
+            "alt": [
+                {
+                    "name": "Blockscout",
+                    "url": "https://eth.blockscout.com"
+                }
+            ]
         },
         "quotes": [
             {
@@ -205,14 +211,16 @@ export const CHAIN_ROWS = [
                 "name": "Pepe",
                 "address": "0x6982508145454Ce325dDbE47a25d4ec3d2311933",
                 "decimals": 18,
-                "kind": "meme"
+                "kind": "meme",
+                "deferred": true
             },
             {
                 "symbol": "SHIB",
-                "name": "Shiba Inu",
+                "name": "SHIBA INU",
                 "address": "0x95aD61b0a150d79219dCF64E1E6Cc01f0B64C4cE",
                 "decimals": 18,
-                "kind": "meme"
+                "kind": "meme",
+                "deferred": true
             }
         ]
     },
@@ -236,7 +244,13 @@ export const CHAIN_ROWS = [
             "url": "https://basescan.org",
             "soak": {
                 "url": "https://sepolia.basescan.org"
-            }
+            },
+            "alt": [
+                {
+                    "name": "Blockscout",
+                    "url": "https://base.blockscout.com"
+                }
+            ]
         },
         "quotes": [
             {
@@ -415,7 +429,13 @@ export const CHAIN_ROWS = [
             "url": "https://arbiscan.io",
             "soak": {
                 "url": "https://sepolia.arbiscan.io"
-            }
+            },
+            "alt": [
+                {
+                    "name": "Blockscout",
+                    "url": "https://arbitrum.blockscout.com"
+                }
+            ]
         },
         "quotes": [
             {
@@ -457,11 +477,17 @@ export const CHAIN_ROWS = [
             "rpcEnv": "FLOOR_RPC_ARC_TESTNET"
         },
         "explorer": {
-            "name": "ArcScan",
-            "url": "https://arcscan.app",
+            "name": "Arc Etherscan",
+            "url": "https://arc.etherscan.io",
             "soak": {
-                "url": "https://testnet.arcscan.app"
-            }
+                "url": "https://explorer.testnet.arc.io"
+            },
+            "alt": [
+                {
+                    "name": "Blockscout",
+                    "url": "https://explorer.arc.io"
+                }
+            ]
         },
         "quotes": [
             {
@@ -489,11 +515,17 @@ export const CHAIN_ROWS = [
             "rpcEnv": "FLOOR_RPC_ROBINHOOD_TESTNET"
         },
         "explorer": {
-            "name": "Robinhood Chain Explorer",
-            "url": "https://explorer.robinhood.com",
+            "name": "Robinhood Chain Etherscan",
+            "url": "https://robin.etherscan.io",
             "soak": {
                 "url": "https://explorer.testnet.chain.robinhood.com"
-            }
+            },
+            "alt": [
+                {
+                    "name": "Blockscout",
+                    "url": "https://robinhoodchain.blockscout.com"
+                }
+            ]
         },
         "quotes": [
             {
@@ -512,24 +544,27 @@ export const CHAIN_ROWS = [
             },
             {
                 "symbol": "WOJAK",
-                "name": "WOJAK",
+                "name": "Wojak",
                 "address": "0x806ba27b5e1c4c2e989a3757a8def9fe1145ed10",
                 "decimals": 18,
-                "kind": "meme"
+                "kind": "meme",
+                "deferred": true
             },
             {
                 "symbol": "AI",
-                "name": "AI",
+                "name": "Artificial Inu",
                 "address": "0x2E8c31162b855A2ffa90F6F8634643Ad6F111e18",
                 "decimals": 18,
-                "kind": "meme"
+                "kind": "meme",
+                "deferred": true
             },
             {
                 "symbol": "PONS",
-                "name": "PONS",
+                "name": "Pons",
                 "address": "0x39dBED3a2bd333467115dE45665cC57F813C4571",
                 "decimals": 18,
-                "kind": "meme"
+                "kind": "meme",
+                "deferred": true
             }
         ]
     },
@@ -552,7 +587,7 @@ export const CHAIN_ROWS = [
             "name": "HyperEVMScan",
             "url": "https://hyperevmscan.io",
             "soak": {
-                "url": "https://testnet.purrsec.com"
+                "url": "https://app.hyperliquid-testnet.xyz/explorer"
             }
         },
         "quotes": [
@@ -586,157 +621,179 @@ export const CHAIN_ROWS = [
             },
             {
                 "symbol": "wNVDAx",
-                "name": "wNVDAx",
+                "name": "Wrapped NVIDIA xStock",
                 "address": "0xa8ddb5cd96b5222afe198316e9a57caa642850d5",
                 "decimals": 18,
-                "kind": "stock"
+                "kind": "stock",
+                "deferred": true
             },
             {
                 "symbol": "wSPYx",
-                "name": "wSPYx",
+                "name": "Wrapped SP500 xStock",
                 "address": "0xe7e553cd128f0011777323a0b44a7b96ea1cb540",
                 "decimals": 18,
-                "kind": "stock"
+                "kind": "stock",
+                "deferred": true
             },
             {
                 "symbol": "wQQQx",
-                "name": "wQQQx",
+                "name": "Wrapped Nasdaq xStock",
                 "address": "0x4c1ae29c159838fc1b224636e28e086eb69101f7",
                 "decimals": 18,
-                "kind": "stock"
+                "kind": "stock",
+                "deferred": true
             },
             {
                 "symbol": "wSKHYx",
-                "name": "wSKHYx",
+                "name": "Wrapped SK hynix xStock",
                 "address": "0x6215a58ed045d71f2561aaabe54f4c885c522998",
                 "decimals": 18,
-                "kind": "stock"
+                "kind": "stock",
+                "deferred": true
             },
             {
                 "symbol": "wMUx",
-                "name": "wMUx",
+                "name": "Wrapped Micron Technology xStock",
                 "address": "0xe2047ee3bddb5c99ae428ab83df63f8730698e30",
                 "decimals": 18,
-                "kind": "stock"
+                "kind": "stock",
+                "deferred": true
             },
             {
                 "symbol": "SPCX.dw",
-                "name": "SPCX.dw",
+                "name": "Wrapped Space Exploration Technologies Corp.",
                 "address": "0x95687557c66bc799a850ba7037673528238ae763",
                 "decimals": 18,
-                "kind": "stock"
+                "kind": "stock",
+                "deferred": true
             },
             {
                 "symbol": "AAPLd",
-                "name": "AAPLd",
+                "name": "Apple",
                 "address": "0x7374dc1894fbd1bc6c42f6ebbc50b78c211a8606",
                 "decimals": 18,
-                "kind": "stock"
+                "kind": "stock",
+                "deferred": true
             },
             {
                 "symbol": "MSFTd",
-                "name": "MSFTd",
+                "name": "Microsoft",
                 "address": "0x66520d8fd614487214a25af7babf27584f59f76b",
                 "decimals": 18,
-                "kind": "stock"
+                "kind": "stock",
+                "deferred": true
             },
             {
                 "symbol": "GOOGLd",
-                "name": "GOOGLd",
+                "name": "Alphabet Class A",
                 "address": "0x35eeda03e55ff217a013892e9e2e37e792b264ea",
                 "decimals": 18,
-                "kind": "stock"
+                "kind": "stock",
+                "deferred": true
             },
             {
                 "symbol": "METAd",
-                "name": "METAd",
+                "name": "Meta Platforms",
                 "address": "0x5a9d2deee7d8782011695623f1c453f46b2b566e",
                 "decimals": 18,
-                "kind": "stock"
+                "kind": "stock",
+                "deferred": true
             },
             {
                 "symbol": "AMZNd",
-                "name": "AMZNd",
+                "name": "Amazon",
                 "address": "0x4f2164c12d2d450a8b1d430492ef6670fe4cad8e",
                 "decimals": 18,
-                "kind": "stock"
+                "kind": "stock",
+                "deferred": true
             },
             {
                 "symbol": "HOODd",
-                "name": "HOODd",
+                "name": "Robinhood Markets",
                 "address": "0xc304a9d52cf9165024ebc7814250ef3a5013f924",
                 "decimals": 18,
-                "kind": "stock"
+                "kind": "stock",
+                "deferred": true
             },
             {
                 "symbol": "CRCLd",
-                "name": "CRCLd",
+                "name": "Circle Internet Group",
                 "address": "0xe74aa6c4050a15790525eb11cc4562c664dc67c9",
                 "decimals": 18,
-                "kind": "stock"
+                "kind": "stock",
+                "deferred": true
             },
             {
                 "symbol": "MUd",
-                "name": "MUd",
+                "name": "Micron Technology",
                 "address": "0x173c83a71c1a9e254721a86b7512cd65bf92648d",
                 "decimals": 18,
-                "kind": "stock"
+                "kind": "stock",
+                "deferred": true
             },
             {
                 "symbol": "ORCLd",
-                "name": "ORCLd",
+                "name": "Oracle",
                 "address": "0xca2156522638f597ffb3705857ffdc356efabe50",
                 "decimals": 18,
-                "kind": "stock"
+                "kind": "stock",
+                "deferred": true
             },
             {
                 "symbol": "AVGOd",
-                "name": "AVGOd",
+                "name": "Broadcom",
                 "address": "0xc2785563af80c05177fff006e3b380ac5d172602",
                 "decimals": 18,
-                "kind": "stock"
+                "kind": "stock",
+                "deferred": true
             },
             {
                 "symbol": "SPCXd",
-                "name": "SPCXd",
+                "name": "SpaceX",
                 "address": "0xe8c8afdf7e80be51e91afa28b6ac44404d270b5d",
                 "decimals": 18,
-                "kind": "stock"
+                "kind": "stock",
+                "deferred": true
             },
             {
                 "symbol": "SPYd",
-                "name": "SPYd",
+                "name": "SPDR S&P 500 ETF",
                 "address": "0xb7bf37783db41a2851b77c6917280c56312c833a",
                 "decimals": 18,
-                "kind": "stock"
+                "kind": "stock",
+                "deferred": true
             },
             {
                 "symbol": "QQQd",
-                "name": "QQQd",
+                "name": "Invesco QQQ",
                 "address": "0x499e347174f237ad28687b947b94c0d49570d1b7",
                 "decimals": 18,
-                "kind": "stock"
+                "kind": "stock",
+                "deferred": true
             },
             {
                 "symbol": "GLDd",
-                "name": "GLDd",
+                "name": "SPDR Gold Shares (ETF)",
                 "address": "0x08be08c37d93e689518ced744a89f113b4afaad4",
                 "decimals": 18,
-                "kind": "stock"
+                "kind": "stock",
+                "deferred": true
             },
             {
                 "symbol": "SLVd",
-                "name": "SLVd",
+                "name": "iShares Silver Trust (ETF)",
                 "address": "0x7ef4eba0c0200957e357627ced1884d6cb63e961",
                 "decimals": 18,
-                "kind": "stock"
+                "kind": "stock",
+                "deferred": true
             },
             {
                 "symbol": "BNBd",
-                "name": "BNBd",
+                "name": "BNB",
                 "address": "0xfd6f06d323f6cb08ee9eeb2d201e9ec0e9112c88",
                 "decimals": 18,
-                "kind": "stock"
+                "kind": "stock",
+                "deferred": true
             }
         ]
     }

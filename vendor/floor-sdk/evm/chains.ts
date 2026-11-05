@@ -106,7 +106,16 @@ export const FLOOR_SALTS = {
     zapDeployer: salt("floor-amm.v2.zap-deployer"),
     routerDeployer: salt("floor-router.v2.router-deployer"),
 } as const;
-export const FLOOR_AMM_ADDRESS: string | null = null;
+export const FLOOR_AMM_ADDRESS: string | null = "0xF10000bd05c2C01793C6d55F027346469683d225";
+export const FLOOR_AMM_FROM_BLOCK: Readonly<Record<ChainKey, number | null>> = {
+    ethereum: 26327910,
+    base: 53421827,
+    bsc: 131270813,
+    arbitrum: 520655168,
+    arc: 29205598,
+    robinhood: 104455459,
+    hyperevm: null,
+};
 const cat = (...h: string[]): string => "0x" + h.map((x) => bytesToHex(hexToBytes(x)).slice(2)).join("");
 const at = (s: string, init: string): string => create2Address({ deployer: CREATE2_FACTORY, salt: s, initCode: init });
 export function floorAmmAddressV2(p: {

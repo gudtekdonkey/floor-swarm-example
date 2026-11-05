@@ -57,6 +57,8 @@ export const EVENTS: Record<string, [
     GenesisListRootSet: S(["signer", "pubkey"], ["oldRoot", "bytes:32"], ["newRoot", "bytes:32"]),
     BurnsSynced: S(["launch", "pubkey"], ["incinerated", "u64"], ["supply", "u64"], ["sOut", "u64"], ["floorAfterX64", "u128"], ["slot", "u64"]),
     TokensBurned: S(["launch", "pubkey"], ["wallet", "pubkey"], ["role", "u8"], ["place", "u8"], ["fromTeamBuy", "u64"], ["fromWallet", "u64"], ["balanceBefore", "u64"], ["owedAfter", "u64"], ["split", "u64[10]"], ["supply", "u64"], ["sOut", "u64"], ["floorAfterX64", "u128"], ["slot", "u64"], ["fromShareBought", "u64?"]),
+    GenesisPublicStarted: S(["signer", "pubkey"], ["at", "i64"]),
+    GenesisEndSet: S(["signer", "pubkey"], ["oldEndsAt", "i64"], ["newEndsAt", "i64"]),
 };
 export const SWEPT_BURN = 0;
 export const SWEPT_EXIT = 1;
