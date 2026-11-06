@@ -114,7 +114,7 @@ export const FLOOR_AMM_FROM_BLOCK: Readonly<Record<ChainKey, number | null>> = {
     arbitrum: 520655168,
     arc: 29205598,
     robinhood: 104455459,
-    hyperevm: null,
+    hyperevm: 50398055,
 };
 const cat = (...h: string[]): string => "0x" + h.map((x) => bytesToHex(hexToBytes(x)).slice(2)).join("");
 const at = (s: string, init: string): string => create2Address({ deployer: CREATE2_FACTORY, salt: s, initCode: init });
