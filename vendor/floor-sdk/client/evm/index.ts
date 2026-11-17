@@ -81,6 +81,23 @@ export function createEvmClient(opts: FloorClientOptions<"evm">): EvmFloorClient
             throw decodeEvmProgramError(e) ?? new FloorError("Transport", `eth_call to ${c.to} failed`, { source: "sdk", cause: e });
         }
     };
+    const approvals = async (token: string, owner: string, amount: bigint): Promise<EvmCall[]> => {
+        let have: bigint | null = null;
+        try {
+            const pad = (a: string): string => a.toLowerCase().replace(/^0x/, "").padStart(64, "0");
+            const out = await transport.rpc.call({ to: token, data: `0xdd62ed3e${pad(owner)}${pad(floorAmm)}` } as EvmCall);
+            if (typeof out === "string" && /^0x[0-9a-fA-F]{64}$/.test(out))
+                have = BigInt(out);
+        }
+        catch {
+            have = null;
+        }
+        if (have !== null && have >= amount)
+            return [];
+        if (have !== null && have > 0n)
+            return [approveCall(token, floorAmm, 0n), approveCall(token, floorAmm, amount)];
+        return [approveCall(token, floorAmm, amount)];
+    };
     const tx = (calls: EvmCall[]): EvmTx => ({ family: "evm", chainId, calls });
     const launchIdOf = (launch: bigint): bigint => {
         if (typeof launch !== "bigint" || launch <= 0n)
@@ -192,13 +209,13 @@ export function createEvmClient(opts: FloorClientOptions<"evm">): EvmFloorClient
             const launchId = launchIdOf(p.launch);
             const { quote } = await launchState(launchId);
             const buy = buyCall({ floorAmm, quote, launchId, amountIn: p.amountIn, minTokensOut: p.minOut, to: p.recipient ?? p.trader, ...(p.deadline !== undefined ? { deadline: p.deadline } : {}) });
-            return tx(quote.toLowerCase() === NATIVE_QUOTE ? [buy] : [approveCall(quote, floorAmm, p.amountIn), buy]);
+            return tx(quote.toLowerCase() === NATIVE_QUOTE ? [buy] : [...(await approvals(quote, p.trader, p.amountIn)), buy]);
         }),
         buildSell: (p) => guard(async () => {
             const launchId = launchIdOf(p.launch);
             const sell = sellCall({ floorAmm, launchId, tokensIn: p.tokensIn, minQuoteOut: p.minOut, to: p.recipient ?? p.trader, ...(p.deadline !== undefined ? { deadline: p.deadline } : {}) });
             const { token } = await launchState(launchId);
-            return tx([approveCall(token, floorAmm, p.tokensIn), sell]);
+            return tx([...(await approvals(token, p.trader, p.tokensIn)), sell]);
         }),
         claim: (p) => guard(async () => tx([claimV2Call({ floorAmm, wallet: p.wallet, types: p.types, quotes: [p.quote], launchIds: p.launches.map(launchIdOf) })])),
         send: (t) => guard(async () => {

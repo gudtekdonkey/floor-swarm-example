@@ -22,11 +22,12 @@ export interface SolLaunchCreatedFields {
 }
 export interface SolGraduatedFields {
     launch: string;
-    priceX64: bigint;
+    windowPriceX64: bigint;
     windowRaised: bigint;
     windowTokens: bigint;
     slot: bigint;
     ts: bigint;
+    priceX64: bigint;
 }
 export interface SolPotsSweptFields {
     launch: string;
@@ -323,6 +324,15 @@ export interface SolTokensBurnedFields {
     slot: bigint;
     fromShareBought: bigint | null;
 }
+export interface SolGenesisPublicStartedFields {
+    signer: string;
+    at: bigint;
+}
+export interface SolGenesisEndSetFields {
+    signer: string;
+    oldEndsAt: bigint;
+    newEndsAt: bigint;
+}
 export interface SolLaunchCreatedV2Fields {
     launch: string;
     mint: string;
@@ -473,6 +483,8 @@ export type SolanaEventMap = {
     GenesisListRootSet: SolGenesisListRootSetFields;
     BurnsSynced: SolBurnsSyncedFields;
     TokensBurned: SolTokensBurnedFields;
+    GenesisPublicStarted: SolGenesisPublicStartedFields;
+    GenesisEndSet: SolGenesisEndSetFields;
     LaunchCreatedV2: SolLaunchCreatedV2Fields;
     Trade: SolTradeFields;
     HolderPositionOpened: SolHolderPositionOpenedFields;

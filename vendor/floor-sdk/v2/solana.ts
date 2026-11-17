@@ -257,13 +257,30 @@ export type TeamShareBuyBaseV2 = {
     quoteVault: string;
     teamSlot?: string;
     memberBase: string;
+    traderRef?: string;
+    escrow?: string;
+    quoteTokenProgram?: string;
+    quoteIsLaunch?: boolean;
 } & Ctx;
 export function teamShareBuyInstructionV2(p: TeamShareBuyBaseV2 & {
     amountIn: bigint;
     minOut: bigint;
 }): Instruction {
-    const base = ix("team_share_buy", [WS(p.member), W(p.launch), R(p.baseMint), R(p.quoteMint), W(p.tokenVault), R(p.quoteVault), R(p.teamSlot ?? teamSlotPda(p.launch, pid(p))[0]), W(p.memberBase), R(TOKEN_2022_PROGRAM_ID)], (w) => w.u64(p.amountIn).u64(minOut(p.minOut, "minOut")), p);
-    return { ...base, accounts: [...base.accounts, ...hookAccountsFor({ baseMint: p.baseMint, srcOwner: p.launch, dstOwner: p.member, programId: p.programId, hookProgramId: p.hookProgramId })] };
+    if (!p.traderRef !== !p.escrow)
+        throw new RangeError("team_share_buy: traderRef and escrow go together");
+    const referred = Boolean(p.traderRef);
+    if (referred && !p.quoteTokenProgram)
+        throw new RangeError("team_share_buy: a referred buyback needs quoteTokenProgram");
+    const base = ix("team_share_buy", [WS(p.member), W(p.launch), R(p.baseMint), R(p.quoteMint), W(p.tokenVault), referred ? W(p.quoteVault) : R(p.quoteVault), R(p.teamSlot ?? teamSlotPda(p.launch, pid(p))[0]), W(p.memberBase), R(TOKEN_2022_PROGRAM_ID)], (w) => w.u64(p.amountIn).u64(minOut(p.minOut, "minOut")), p);
+    const accounts = [...base.accounts, ...hookAccountsFor({ baseMint: p.baseMint, srcOwner: p.launch, dstOwner: p.member, programId: p.programId, hookProgramId: p.hookProgramId })];
+    if (!referred)
+        return { ...base, accounts };
+    accounts.push(W(p.traderRef!), W(p.escrow!), R(p.quoteTokenProgram!));
+    if (p.quoteIsLaunch) {
+        accounts.push(...hookAccountsFor({ baseMint: p.quoteMint, srcOwner: p.launch, dstOwner: p.traderRef!, programId: p.programId, hookProgramId: p.hookProgramId }));
+        accounts.push(W(holderPositionPda(launchPda(p.quoteMint, pid(p))[0], p.traderRef!, hid(p))[0]));
+    }
+    return { ...base, accounts };
 }
 const REM_HOOK_AT = 5;
 export interface TradeAccountsV2 extends TradeAccounts {

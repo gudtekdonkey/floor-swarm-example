@@ -27,6 +27,7 @@ export function splitRowOfRowV2(r: {
     phiBps: number;
     ckTargetBps?: number;
     ckBps?: number;
+    wcBps?: number;
     msClass: number;
     flags: number;
     platformMsBps: number;
@@ -41,7 +42,7 @@ export function splitRowOfRowV2(r: {
     return {
         phiBps: r.phiBps,
         ckBps: ck as number,
-        wcBps: 300,
+        wcBps: r.wcBps ?? 300,
         cShareBps: 5000,
         msClass: r.msClass,
         platformMsBps: (r.flags & 1) !== 0 ? r.platformMsBps : 0,
@@ -77,6 +78,10 @@ export interface Split {
     ];
     sqrtFNew: Sqrt;
 }
+export function surplus(sqrtF: Sqrt, back: bigint, n: bigint): bigint {
+    const base = flatMoneyForTokens(sqrtF, n, UP);
+    return base === null || base === undefined ? 0n : sat(back, base);
+}
 export function split(row: SplitRow, ranges: readonly Range[], inp: SplitIn, pieces: readonly Piece[]): Split {
     let tokensSum = 0n;
     for (const p of pieces)
@@ -85,6 +90,7 @@ export function split(row: SplitRow, ranges: readonly Range[], inp: SplitIn, pie
     if (sr < 0n)
         fail("Overflow");
     let fr = inp.fTotal;
+    const s0 = surplus(inp.sqrtF, fr + inp.fClaims, sr + inp.held);
     const phi = BigInt(row.phiBps);
     let ckAdd = 0n;
     let ms = 0n;
@@ -103,7 +109,7 @@ export function split(row: SplitRow, ranges: readonly Range[], inp: SplitIn, pie
         const capB = cdiv(cdiv(pc.money * inp.sqrtF, lo) * inp.sqrtF, lo);
         const cap = min(max(capA, capB), pc.money);
         const n = sr + inp.held;
-        const needAll = max(flatUp(inp.sqrtF, n), cdiv(flatUp(pc.sqrtHi, n) * phi, 10000n));
+        const needAll = max(flatUp(inp.sqrtF, n) + s0, cdiv(flatUp(pc.sqrtHi, n) * phi, 10000n));
         if (r.kind !== KIND_TAIL)
             topNeed = needAll;
         const need = sat(needAll, fr + inp.fClaims);

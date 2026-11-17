@@ -1,7 +1,7 @@
 import type { Instruction } from "../solana/instruction.ts";
 import type { EvmCall } from "../v2/evm.ts";
 import type { FloorError } from "../errors.ts";
-export type FloorFamily = "solana" | "evm";
+export type FloorFamily = "solana" | "evm" | "ton";
 export interface SolanaChain {
     family: "solana";
     programId?: string;
