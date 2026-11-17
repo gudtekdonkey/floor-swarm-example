@@ -74,6 +74,29 @@ swarm buy 5 sol:<mint> --group snipers --count most:20 --instant
 
 `swarm help` lists every command and knob.
 
+## A local world without the FLOOR Program's source
+
+With no `floor-amm` checkout, both worlds can stand on a local fork of a mainnet where the FLOOR Program is already deployed.
+The fork runs on loopback (anvil, Surfpool), which the network guard allows whatever chain it forks. Every write lands on
+the fork and none reaches the forked chain. The forked RPC is only read.
+
+```sh
+scripts/fork-evm.sh                  # anvil forking Base (--fork <rpc>, --port); writes data/local-evm-8453.json
+scripts/fork-sol.sh                  # Surfpool forking mainnet-beta (--fork, --port, --proxy-port); writes data/local-sol-fork.json
+SWARM_WORLD=data/local-evm-8453.json SWARM_SOL_WORLD=data/local-sol-fork.json npm run test:local
+```
+
+- EVM: a mock dUSDC (`scripts/fork/DUSDC.sol`) is deployed and listed as a quote by impersonating the program's authority.
+  Fresh registry prices are written as the price updater. Two preset-3 launches are created, and dUSDC is minted to anvil's
+  dev account 9. It needs Foundry.
+- Solana: a throwaway treasury keypair is given SOL and mainnet USDC with Surfpool's cheatcodes. USDC stands in for dUSDC.
+  The world's RPC is a loopback proxy (`scripts/fork/sig-proxy.mjs`) in front of Surfpool. Surfpool forwards
+  `getSignaturesForAddress` with `until` to the remote cluster, which knows no fork-only signature, so the proxy answers that
+  call itself. It needs `surfpool` on `PATH` (v1.0.0 tested).
+- The Solana claim test (in `test/local/sol.more.e2e.test.ts`) moves the cluster clock a day on, and the SDK refuses a
+  registry price over 24 h old. Restart Surfpool and its world before running the suite again, on either Solana world.
+  The EVM tests write fresh prices themselves.
+
 ## Swap, snipe, claim and the Team Slot
 
 All four take `--dry-run` and `--json`, and each is recorded as a run in the ledger.
@@ -278,7 +301,8 @@ Every command takes `--json` and then prints exactly one JSON object on stdout, 
 | `src/vault/`, `src/store/` | The encrypted vault and the ledger |
 | `src/commands/` | `buy`, `sell`, `fund` |
 | `vendor/floor-sdk/` | A pinned copy of `@floorlaunchpad/sdk` |
-| `scripts/local-evm.sh` | The local anvil world |
+| `scripts/local-evm.sh`, `scripts/local-sol.sh` | The local anvil and Surfpool worlds, from the FLOOR Program's devkit |
+| `scripts/fork-evm.sh`, `scripts/fork-sol.sh`, `scripts/fork/` | The same worlds on a local fork of mainnet, without the devkit |
 | `test/unit/`, `test/local/` | Unit tests, and end-to-end tests against the local world |
 
 The swarm never signs in to FLOOR and never takes a FLOOR account's key. Its wallets are its own; a launch's creator is one

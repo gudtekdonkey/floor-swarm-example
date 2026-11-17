@@ -33,17 +33,19 @@ export const impactBps = (before: bigint, after: bigint): bigint => (before === 
 export function devBuyFromTrade(t: TradeEventV2, team: DevTeam, ctx: {
     teamBuy?: boolean;
     teamShareBuy?: boolean;
+    buyer?: string;
 } = {}): DevBuy | null {
     if (!t.isBuy)
         return null;
+    const person = ctx.buyer ?? t.trader;
     let role: DevBuyRole | null = null;
     if (t.kind === TRADE_KIND_TEAM_BUY || ctx.teamBuy)
         role = "team_buy";
     else if (t.kind === TRADE_KIND_TEAM_SHARE_BUY || ctx.teamShareBuy)
         role = "team_share_buy";
-    else if (t.trader === team.creator)
+    else if (person === team.creator)
         role = "creator";
-    else if (teamSlotWallets(team.teamSlot).includes(t.trader))
+    else if (teamSlotWallets(team.teamSlot).includes(person))
         role = "team_member";
     if (role === null)
         return null;
@@ -51,7 +53,7 @@ export function devBuyFromTrade(t: TradeEventV2, team: DevTeam, ctx: {
     const priceAfterX64 = priceX64(t.sqrtAfter);
     return {
         launch: t.launch,
-        trader: t.trader,
+        trader: person,
         role,
         quoteIn: t.quoteGross - t.refund,
         tokens: t.tokens,
@@ -62,3 +64,30 @@ export function devBuyFromTrade(t: TradeEventV2, team: DevTeam, ctx: {
     };
 }
 export const devBuyChangeSinceBps = (d: DevBuy, sqrtNow: bigint): bigint => impactBps(d.priceAfterX64, priceX64(sqrtNow));
+export interface TeamSeat {
+    place: number;
+    wallet: string;
+}
+export interface MemberSold {
+    launch: string;
+    member: string;
+    place: number;
+    amount: bigint;
+    quoteOut: bigint;
+    slot?: bigint;
+}
+export function memberSoldFromTrade(t: Pick<TradeEventV2, "launch" | "trader" | "isBuy" | "tokens" | "quoteNet"> & {
+    recipient?: string;
+    slot?: bigint;
+}, seats: readonly TeamSeat[], same: (a: string, b: string) => boolean = (a, b) => a === b): MemberSold | null {
+    if (t.isBuy)
+        return null;
+    for (const who of t.recipient === undefined ? [t.trader] : [t.trader, t.recipient]) {
+        const held = seats.filter((s) => same(s.wallet, who));
+        if (held.length === 0)
+            continue;
+        const seat = held.reduce((lo, s) => (s.place < lo.place ? s : lo));
+        return { launch: t.launch, member: seat.wallet, place: seat.place, amount: t.tokens, quoteOut: t.quoteNet, ...(t.slot === undefined ? {} : { slot: t.slot }) };
+    }
+    return null;
+}

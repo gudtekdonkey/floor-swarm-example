@@ -23,22 +23,32 @@ export interface ExplorerRow {
         url: string;
         query?: string;
     };
+    alt?: {
+        name: string;
+        url: string;
+    }[];
 }
 export interface ChainRow {
     name: ChainName;
     label: string;
-    family: "solana" | "evm";
+    family: "solana" | "evm" | "ton";
     v2DayOne: boolean;
     chainId?: number;
     cluster?: string;
+    network?: string;
+    globalId?: number;
+    nativeDecimals?: number;
     native: string;
     nativeName: string;
     floorAmmAddress?: string | null;
+    tonFactoryAddress?: string | null;
     rpcEnv: string;
     soak: {
         name?: string;
         chainId?: number;
         cluster?: string;
+        network?: string;
+        globalId?: number;
         rpcEnv: string;
     };
     explorer: ExplorerRow;

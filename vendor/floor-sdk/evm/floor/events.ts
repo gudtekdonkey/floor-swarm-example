@@ -1,6 +1,7 @@
 import { checksumAddress } from "../abi.ts";
 import { decodeEventLog, itemTopic } from "../items.ts";
 import type { EventArgsOf, EventName, Log } from "../items.ts";
+import { LEGACY_CLAIMED_TOPIC, LEGACY_EVENTS, normalizeLegacyClaimed } from "./legacy-events.ts";
 import { FLOOR_AMM_ABI, FLOOR_AMM_UNFROZEN_EVENTS, FLOOR_ZAP_ABI } from "./iface.ts";
 export type FloorEventName = EventName<typeof FLOOR_AMM_ABI> | EventName<typeof FLOOR_ZAP_ABI>;
 export type FloorEventArgs<N extends EventName<typeof FLOOR_AMM_ABI>> = EventArgsOf<typeof FLOOR_AMM_ABI, N>;
@@ -9,6 +10,7 @@ export interface FloorEvmEvent {
     args: Record<string, any>;
     address?: string;
     unfrozen?: true;
+    legacy?: true;
 }
 const ALL = [...FLOOR_AMM_ABI, ...FLOOR_ZAP_ABI, ...FLOOR_AMM_UNFROZEN_EVENTS];
 let unfrozen: Set<string> | undefined;
@@ -28,12 +30,18 @@ for (const i of ALL.filter((i) => i.type === "event").reverse()) {
             },
         });
 }
+export const FLOOR_LEGACY_EVENT_TOPICS: Record<string, string> = { Claimed: LEGACY_CLAIMED_TOPIC };
 export function decodeFloorLog(log: Log, from?: readonly string[]): FloorEvmEvent | null {
     if (from && (!log.address || !from.some((a) => a.toLowerCase() === log.address!.toLowerCase())))
         return null;
     const d: FloorEvmEvent | null = decodeEventLog(ALL, log);
-    if (!d)
-        return null;
+    if (!d) {
+        const old = decodeEventLog(LEGACY_EVENTS, log);
+        if (!old)
+            return null;
+        const e: FloorEvmEvent = { ...old, args: normalizeLegacyClaimed(old.args), legacy: true };
+        return log.address ? { ...e, address: checksumAddress(log.address) } : e;
+    }
     if (UNFROZEN().has((log.topics[0] ?? "").toLowerCase()))
         d.unfrozen = true;
     return log.address ? { ...d, address: checksumAddress(log.address) } : d;

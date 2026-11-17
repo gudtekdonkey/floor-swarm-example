@@ -15,7 +15,7 @@ export const EVENTS: Record<string, [
     T
 ][]> = {
     LaunchCreated: S(["launch", "pubkey"], ["mint", "pubkey"], ["quoteMint", "pubkey"], ["creator", "pubkey"], ["id", "u64"], ["presetId", "u8"], ["presetVersion", "u32"], ["presetHash", "bytes:32"], ["p0X64", "u128"], ["raise", "u64"], ["windowTokens", "u64"], ["creatorBuyTokens", "u64"], ["createFee", "u64"], ["name", "bytes:32"], ["symbol", "bytes:10"], ["slot", "u64"], ["ts", "i64"], ["listed", "bool"], ["quoteUsdCentsX64", "u128"], ["nativeCreateFee", "u64"]),
-    Graduated: S(["launch", "pubkey"], ["priceX64", "u128"], ["windowRaised", "u64"], ["windowTokens", "u64"], ["slot", "u64"], ["ts", "i64"]),
+    Graduated: S(["launch", "pubkey"], ["windowPriceX64", "u128"], ["windowRaised", "u64"], ["windowTokens", "u64"], ["slot", "u64"], ["ts", "i64"], ["priceX64", "u128"]),
     PotsSwept: S(["launch", "pubkey"], ["amount", "u64"], ["reason", "u8"]),
     Claimed: S(["wallet", "pubkey"], ["sender", "pubkey"], ["launch", "pubkey"], ["quoteMint", "pubkey"], ["types", "u8"], ["creator", "u64"], ["creatorRef", "u64"], ["teamSlot", "u64"], ["traderRef", "u64"], ["extra", "u64"], ["amount", "u64"], ["teamBuy", "u64?"], ["shareBought", "u64?"], ["typesHi", "u8?"]),
     TeamShareBought: S(["launch", "pubkey"], ["member", "pubkey"], ["place", "u8"], ["spent", "u64"], ["refund", "u64"], ["tokens", "u64"], ["shareLeft", "u64"], ["boughtOwed", "u64"], ["day", "u64"], ["firstToday", "bool"], ["ts", "i64"]),
@@ -57,6 +57,8 @@ export const EVENTS: Record<string, [
     GenesisListRootSet: S(["signer", "pubkey"], ["oldRoot", "bytes:32"], ["newRoot", "bytes:32"]),
     BurnsSynced: S(["launch", "pubkey"], ["incinerated", "u64"], ["supply", "u64"], ["sOut", "u64"], ["floorAfterX64", "u128"], ["slot", "u64"]),
     TokensBurned: S(["launch", "pubkey"], ["wallet", "pubkey"], ["role", "u8"], ["place", "u8"], ["fromTeamBuy", "u64"], ["fromWallet", "u64"], ["balanceBefore", "u64"], ["owedAfter", "u64"], ["split", "u64[10]"], ["supply", "u64"], ["sOut", "u64"], ["floorAfterX64", "u128"], ["slot", "u64"], ["fromShareBought", "u64?"]),
+    GenesisPublicStarted: S(["signer", "pubkey"], ["at", "i64"]),
+    GenesisEndSet: S(["signer", "pubkey"], ["oldEndsAt", "i64"], ["newEndsAt", "i64"]),
 };
 export const SWEPT_BURN = 0;
 export const SWEPT_EXIT = 1;

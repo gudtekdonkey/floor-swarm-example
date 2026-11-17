@@ -108,7 +108,37 @@ export const CHAIN_REGISTRY = [
         },
         "finality": "finalized",
         "reorgWindow": 65
+    },
+    {
+        "slug": "elysium",
+        "label": "Elysium",
+        "family": "evm",
+        "v2DayOne": true,
+        "chainId": 99901,
+        "soakChainId": 99801,
+        "native": {
+            "name": "Hype",
+            "symbol": "HYPE"
+        },
+        "finality": "safe",
+        "reorgWindow": 3400
+    },
+    {
+        "slug": "ton",
+        "label": "TON",
+        "family": "ton",
+        "v2DayOne": false,
+        "network": "mainnet",
+        "globalId": -239,
+        "soakNetwork": "testnet",
+        "soakGlobalId": -3,
+        "native": {
+            "name": "Gram",
+            "symbol": "GRAM",
+            "decimals": 9
+        }
     }
 ] as const;
-export const CHAIN_SLUGS = ["solana", "ethereum", "base", "bsc", "arbitrum", "arc", "robinhood", "hyperevm"] as const;
-export const EVM_CHAIN_SLUGS = ["ethereum", "base", "bsc", "arbitrum", "arc", "robinhood", "hyperevm"] as const;
+export const CHAIN_SLUGS = ["solana", "ethereum", "base", "bsc", "arbitrum", "arc", "robinhood", "hyperevm", "elysium", "ton"] as const;
+export const EVM_CHAIN_SLUGS = ["ethereum", "base", "bsc", "arbitrum", "arc", "robinhood", "hyperevm", "elysium"] as const;
+export const TON_CHAIN_SLUGS = ["ton"] as const;
