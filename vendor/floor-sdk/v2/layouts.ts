@@ -120,7 +120,10 @@ export const LAUNCH_V2: Layout = [
     ["backing_credited", "u64"],
     ["incinerated", "u64"],
     ["last_ts", "i64"],
-    ["book_hash", "bytes:32"],
+    ["k_at_f", "u64"],
+    ["k_floor_tokens", "u64"],
+    ["kpot", "u8"],
+    ["pad_end", "bytes:15"],
 ];
 export const HOLDER_POSITION: Layout = [
     ["version", "u8"],

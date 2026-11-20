@@ -16,7 +16,7 @@ import { V2_EVENT_FIELD_NAMES } from "../abi/evm-event-names.ts";
 export const CLAIM_HOLDER_EVM = CLAIM_BITS.evm.holder;
 export const CLAIM_KNOWN_V2_EVM = CLAIM_KNOWN_MASKS.evm.v2;
 const BOOK_RANGE = "(uint128,uint128,uint64,uint64,uint64,uint128,uint16,uint16,uint8,uint8)";
-const LAUNCH_BOOK = `(uint128,uint128,uint128,uint128[],uint8,${BOOK_RANGE}[48],uint128,uint64,uint64[],uint128[],uint8,uint8,uint128[],uint128[],uint128,uint64,bool,uint32[5])`;
+const LAUNCH_BOOK = `(uint128,uint128,uint128,uint128[],uint8,${BOOK_RANGE}[48],uint128,uint64,uint64[],uint128[],uint8,uint8,uint128[],uint128[],uint128,uint64,bool,uint32[5],uint128,uint64,bool)`;
 const BUY_OUT = "(uint256,uint256,uint256,uint128,uint8,bool,bool)";
 export const V2_VIEWS = {
     launchBook: { sig: evmSignature("launchBook"), ret: [LAUNCH_BOOK] },
@@ -134,6 +134,9 @@ export interface LaunchBookV2 {
     bandFClaim: bigint[];
     ckAtF: bigint;
     ckFloorTokens: bigint;
+    kpot: boolean;
+    kAtF: bigint;
+    kFloorTokens: bigint;
     graduated: boolean;
     feePpm: number[];
 }
@@ -202,6 +205,9 @@ export function decodeLaunchBook(data: string | Uint8Array): LaunchBookV2 {
         ckFloorTokens: big(t[15]),
         graduated: t[16] as boolean,
         feePpm: nums(t[17]),
+        kAtF: big(t[18]),
+        kFloorTokens: big(t[19]),
+        kpot: t[20] as boolean,
     };
 }
 export function decodeSimBuy(data: string | Uint8Array): SimBuyV2 {
@@ -391,6 +397,9 @@ export function evmSettleInputsV2(b: LaunchBookV2, row: SplitRow, sup: Supply, m
         bandFClaim: pad(b.bandFClaim, BIDS_MAX, 0n).slice(0, BIDS_MAX),
         ckAtF: b.ckAtF,
         ckFloorTokens: b.ckFloorTokens,
+        kpot: b.kpot,
+        kAtF: b.kAtF,
+        kFloorTokens: b.kFloorTokens,
         feePpm: [...b.feePpm],
         graduated: b.graduated,
         feeStartPpm: curve ? [...curve.feeStartPpm] : [0, 0, 0, 0, 0],

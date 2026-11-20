@@ -13,6 +13,28 @@ const min = (a: bigint, b: bigint): bigint => (a < b ? a : b);
 const max = (a: bigint, b: bigint): bigint => (a > b ? a : b);
 const sat = (a: bigint, b: bigint): bigint => (a > b ? a - b : 0n);
 const cdiv = (a: bigint, d: bigint): bigint => (a + d - 1n) / d;
+export const shareSplit = (x: bigint, cShareBps: number): [
+    bigint,
+    bigint
+] => {
+    const c = cdiv(x * BigInt(cShareBps), 10000n);
+    return [c, x - c];
+};
+export const potsSplit = (x: bigint, cShareBps: number, gapC: bigint, gapK: bigint): [
+    bigint,
+    bigint
+] => {
+    let [c, k] = shareSplit(x, cShareBps);
+    if (c > gapC) {
+        k += c - gapC;
+        c = gapC;
+    }
+    else if (k > gapK) {
+        c += k - gapK;
+        k = gapK;
+    }
+    return [c, k];
+};
 const flatUp = (s: Sqrt, n: bigint): bigint => ov(flatMoneyForTokens(s, n, UP));
 export interface SplitRow {
     phiBps: number;
@@ -61,7 +83,8 @@ export interface SplitIn {
     sqrtP1: Sqrt;
     fTotal: bigint;
     fClaims: bigint;
-    ck0: bigint;
+    c0: bigint;
+    k0: bigint;
     held: bigint;
     sNew: bigint;
 }
@@ -69,6 +92,10 @@ export interface Split {
     dF: bigint;
     ckAdd: bigint;
     ckTake: bigint;
+    cAdd: bigint;
+    kAdd: bigint;
+    cTake: bigint;
+    kTake: bigint;
     ms: bigint;
     booked: [
         bigint,
@@ -92,8 +119,15 @@ export function split(row: SplitRow, ranges: readonly Range[], inp: SplitIn, pie
     let fr = inp.fTotal;
     const s0 = surplus(inp.sqrtF, fr + inp.fClaims, sr + inp.held);
     const phi = BigInt(row.phiBps);
-    let ckAdd = 0n;
+    let cAdd = 0n;
+    let kAdd = 0n;
     let ms = 0n;
+    const cs = BigInt(row.cShareBps);
+    const force = (x: bigint): void => {
+        const xc = cdiv(x * cs, 10000n);
+        cAdd += xc;
+        kAdd += x - xc;
+    };
     let topNeed = 0n;
     const booked: [
         bigint,
@@ -117,31 +151,51 @@ export function split(row: SplitRow, ranges: readonly Range[], inp: SplitIn, pie
         fr += dF;
         const rem = pc.money - dF;
         if (r.thetaBps >= 10000) {
-            ckAdd += rem;
+            force(rem);
             continue;
         }
-        const gap = sat(cdiv(flatUp(pc.sqrtHi, sr) * BigInt(row.ckBps), 10000n), inp.ck0 + ckAdd);
-        let ck = min(rem, gap);
-        let mm = rem - ck;
+        const t = cdiv(flatUp(pc.sqrtHi, sr) * BigInt(row.ckBps), 10000n);
+        const tc = cdiv(t * cs, 10000n);
+        const gapC = sat(tc, inp.c0 + cAdd);
+        const gapK = sat(t - tc, inp.k0 + kAdd);
+        const m = min(rem, gapC + gapK);
+        let mc = cdiv(m * cs, 10000n);
+        let mk = m - mc;
+        if (mc > gapC) {
+            mk += mc - gapC;
+            mc = gapC;
+        }
+        else if (mk > gapK) {
+            mc += mk - gapK;
+            mk = gapK;
+        }
+        cAdd += mc;
+        kAdd += mk;
+        let mm = rem - m;
         if (r.msCapPpm > 0) {
             const capm = (pc.money * BigInt(r.msCapPpm)) / 1000000n;
             if (mm > capm) {
-                ck += mm - capm;
+                force(mm - capm);
                 mm = capm;
             }
         }
-        ckAdd += ck;
         ms += mm;
     }
-    let ckTake = 0n;
+    let cTake = 0n;
+    let kTake = 0n;
     const short = sat(topNeed, fr + inp.fClaims);
-    if (short > 0n && inp.ck0 + ckAdd > 0n) {
-        const a = min(short, ckAdd);
-        const m2 = min(short - a, ms);
-        ckTake = min(short - a - m2, inp.ck0);
-        ckAdd -= a;
+    if (short > 0n && inp.c0 + inp.k0 + cAdd + kAdd > 0n) {
+        const x = min(short, cAdd + kAdd);
+        const [ac, ak] = potsSplit(x, 5000, cAdd, kAdd);
+        let left = short - x;
+        const m2 = min(left, ms);
+        left -= m2;
+        const y = min(left, inp.c0 + inp.k0);
+        [cTake, kTake] = potsSplit(y, 5000, inp.c0, inp.k0);
+        cAdd -= ac;
+        kAdd -= ak;
         ms -= m2;
-        fr += a + m2 + ckTake;
+        fr += ac + ak + m2 + cTake + kTake;
     }
     booked[2] = (ms * BigInt(row.platformMsBps)) / 10000n;
     booked[3] = (ms * BigInt(row.floorMsBps)) / 10000n;
@@ -149,6 +203,6 @@ export function split(row: SplitRow, ranges: readonly Range[], inp: SplitIn, pie
     const ratio = sqrtOfRatio(fr + inp.fClaims, inp.sNew + inp.held);
     const capSqrt = ov(sqrtScaleDownBps(inp.sqrtP1, row.wcBps));
     const sqrtFNew = max(inp.sqrtF, ratio === null ? inp.sqrtF : min(ratio, capSqrt));
-    return { dF: fr - inp.fTotal, ckAdd: u128(ckAdd), ckTake, ms: u128(ms), booked, sqrtFNew };
+    return { dF: fr - inp.fTotal, ckAdd: u128(cAdd + kAdd), ckTake: cTake + kTake, cAdd: u128(cAdd), kAdd: u128(kAdd), cTake, kTake, ms: u128(ms), booked, sqrtFNew };
 }
 export const pieceEntersSplit = (r: Range): boolean => r.kind !== KIND_BONDING;

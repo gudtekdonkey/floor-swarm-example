@@ -27110,6 +27110,83 @@ export const CHAIN_ROWS = [
                 "address": "0xfd6f06d323f6cb08ee9eeb2d201e9ec0e9112c88",
                 "decimals": 18,
                 "kind": "stock"
+            },
+            {
+                "symbol": "EQQQQ",
+                "name": "EQX Tokenized QQQ",
+                "address": "0x095cca17f0619596115eA09bbE1D80431685Ba1A",
+                "decimals": 8,
+                "kind": "stock"
+            },
+            {
+                "symbol": "EQSPY",
+                "name": "EQX Tokenized SPY",
+                "address": "0x07A76acCed707De999A54D39aFF62A2d7ac4CC81",
+                "decimals": 8,
+                "kind": "stock"
+            },
+            {
+                "symbol": "EQNVDA",
+                "name": "EQX Tokenized NVDA",
+                "address": "0xA23aFe6Bd466BdB806a83AfDDA76F644FC4347CF",
+                "decimals": 8,
+                "kind": "stock"
+            },
+            {
+                "symbol": "EQTSLA",
+                "name": "EQX Tokenized TSLA",
+                "address": "0x883DAd2Aa97175c0D1569E1de61204ac47b2b8fb",
+                "decimals": 8,
+                "kind": "stock"
+            },
+            {
+                "symbol": "EQAAPL",
+                "name": "EQX Tokenized AAPL",
+                "address": "0x15d82780780Ca72570818f91587B752562D655bc",
+                "decimals": 8,
+                "kind": "stock"
+            },
+            {
+                "symbol": "EQGOOG",
+                "name": "EQX Tokenized GOOGL",
+                "address": "0x4720b40C89Ff3A74C6bE8eA34Cf40FaE5eacEd79",
+                "decimals": 8,
+                "kind": "stock"
+            },
+            {
+                "symbol": "EQMETA",
+                "name": "EQX Tokenized META",
+                "address": "0xF5c6190d9178097563372a4acA15D52Ec24F129A",
+                "decimals": 8,
+                "kind": "stock"
+            },
+            {
+                "symbol": "EQMSFT",
+                "name": "EQX Tokenized MSFT",
+                "address": "0xca911A8ae21baAf9CDec0baa45259c64Ec8AE59E",
+                "decimals": 8,
+                "kind": "stock"
+            },
+            {
+                "symbol": "EQAMZN",
+                "name": "EQX Tokenized AMZN",
+                "address": "0x582C6ADd0eb720EA1c2e2019fF9b7c21Fe99288F",
+                "decimals": 8,
+                "kind": "stock"
+            },
+            {
+                "symbol": "EQMU",
+                "name": "EQX Tokenized MU",
+                "address": "0x9164Fd5f67FE4188Ff79675182183512bC37d66D",
+                "decimals": 8,
+                "kind": "stock"
+            },
+            {
+                "symbol": "EQSPCX",
+                "name": "EQX Tokenized SPCX",
+                "address": "0xF115FF708A795cD0E06531Dec57ed716138bE8BD",
+                "decimals": 8,
+                "kind": "stock"
             }
         ]
     },

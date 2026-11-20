@@ -28,7 +28,7 @@ export type SquidHook = {
     fundAmount?: string;
 };
 export const SQUID_TOKEN_SCALE = 10n ** 12n;
-export const SQUID_GAS = { transfer: 65000, buy: 700000, sell: 750000, zapBuy: 900000, passOn: 30000 } as const;
+export const SQUID_GAS = { transfer: 65000, buy: 1100000, sell: 850000, zapBuy: 1300000, passOn: 30000 } as const;
 type Common = {
     chainId: number | string;
     multicall: string;
@@ -90,14 +90,14 @@ export function buyHookNative(p: Common & {
     swapData: string;
     minQuoteIn: bigint;
     minTokensOut: bigint;
-    quote?: string;
+    quote: string;
 }): SquidHook {
     checkCommon(p);
     const user = checkUser(p);
     if (p.minQuoteIn <= 0n || p.minTokensOut <= 0n)
         throw new SquidHookError("NO_MINIMUM", "minQuoteIn and minTokensOut must be > 0");
     const zap = lc(p.zap, "zap");
-    const quote = lc(p.quote ?? ZERO, "quote");
+    const quote = lc(p.quote, "quote");
     const calls = [
         call(SQUID_CALL.FullNativeBalance, zap, 0n, bytesToHex(encodeCall("buyWithEth(uint256,bytes,uint256,uint256,address,uint256)", [p.launchId, p.swapData, p.minQuoteIn, p.minTokensOut, user, p.deadline])), "0x", SQUID_GAS.zapBuy),
         call(SQUID_CALL.FullNativeBalance, user, 0n, "0x", "0x", SQUID_GAS.passOn),

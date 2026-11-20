@@ -140,7 +140,7 @@ export function createLaunchV2(row: RowV2, ctx: CreateCtx): CreatedV2 {
 export function teamBuyV2(book: Book, gross: bigint, max: bigint): BookBuy {
     const take = gross < max ? gross : max;
     if (take === 0n) {
-        return { gross, net: 0n, refund: gross, tokens: 0n, fees: [0n, 0n, 0n, 0n, 0n], fromResale: 0n, fromFirst: 0n, steps: 0, budgetHit: false, graduatedNow: false, sqrtBefore: book.sqrtP, sqrtAfter: book.sqrtP, split: { dF: 0n, ckAdd: 0n, ckTake: 0n, ms: 0n, booked: [0n, 0n, 0n, 0n], sqrtFNew: 0n }, relay: { nC: 0, nK: 0, laidC: 0n, laidK: 0n, atF: 0n, kept: 0 } };
+        return { gross, net: 0n, refund: gross, tokens: 0n, fees: [0n, 0n, 0n, 0n, 0n], fromResale: 0n, fromFirst: 0n, steps: 0, budgetHit: false, graduatedNow: false, sqrtBefore: book.sqrtP, sqrtAfter: book.sqrtP, split: { dF: 0n, ckAdd: 0n, ckTake: 0n, cAdd: 0n, kAdd: 0n, cTake: 0n, kTake: 0n, ms: 0n, booked: [0n, 0n, 0n, 0n], sqrtFNew: 0n }, relay: { nC: 0, nK: 0, laidC: 0n, laidK: 0n, atF: 0n, kAtF: 0n, kept: 0 } };
     }
     const r = bookBuy(book, take, 0n);
     return { ...r, refund: r.refund + gross - take, gross };

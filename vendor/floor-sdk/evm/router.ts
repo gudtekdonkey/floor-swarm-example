@@ -1,8 +1,7 @@
 import { encodeFunctionData } from "./items.ts";
 import { deadlineArg } from "./floor/calls.ts";
 import { EVM_NATIVE, NoRouteError, coinKey } from "../route/graph.ts";
-import { EVM_CHAINS, chainById } from "./chains.ts";
-import type { ChainKey } from "./chains.ts";
+import { chainById } from "./chains.ts";
 import type { Pool } from "../route/graph.ts";
 import type { HopQuote, RouteQuote } from "../route/quote.ts";
 const BUY = [
@@ -223,43 +222,4 @@ export function evmRouteCall(q: RouteQuote, p: {
         return call(encodeRouterSell(s, p.chainId), 0n);
     const b: RouterBuy = { path: ids(buys), tokenIn: s.tokenOut, amountIn: 0n, swapData: "0x", minQuoteIn: 0n, minTokensOut: mins(buys), to: p.to, deadline: p.deadline };
     return call(encodeRouterSwap(s, b, p.chainId), 0n);
-}
-export async function floorRouterLive(rpc: {
-    getCode: (address: string) => Promise<string | undefined>;
-}, at: string | {
-    chain: ChainKey;
-    slot: string;
-}): Promise<boolean> {
-    const address = floorRouterAt(at);
-    const code: unknown = await rpc.getCode(address);
-    if (code === undefined)
-        return false;
-    if (typeof code !== "string" || !/^0x([0-9a-fA-F]{2})*$/.test(code))
-        throw new TypeError(`getCode(${address}) returned ${String(code)}, not hex bytes`);
-    return code.length > 2;
-}
-export async function assertFloorRouterLive(rpc: {
-    getCode: (address: string) => Promise<string | undefined>;
-}, at: string | {
-    chain: ChainKey;
-    slot: string;
-}): Promise<string> {
-    const address = floorRouterAt(at);
-    if (!(await floorRouterLive(rpc, address)))
-        throw new RangeError(`FloorRouter ${address} has no code on this chain yet: it is derived ahead of its deploy; do not send to it (a native coin sent to it is lost)`);
-    return address;
-}
-function floorRouterAt(at: string | {
-    chain: ChainKey;
-    slot: string;
-}): string {
-    if (typeof at === "string") {
-        if (!/^0x[0-9a-fA-F]{40}$/.test(at))
-            throw new RangeError(`a FloorRouter is a 20-byte address: ${at}`);
-        return at;
-    }
-    const row = EVM_CHAINS[at.chain]?.zapRouters.find((r) => r.slot === at.slot);
-    if (row === undefined)
-        throw new RangeError(`no FloorRouter slot ${at.slot} on ${at.chain}`);
-    return row.floorRouter;
 }

@@ -13,7 +13,6 @@ export interface ZapRouter {
     forkEncoding?: boolean;
     urFork?: ZapUrFork;
     zap: string | null;
-    floorRouter: string;
 }
 export interface EvmChain {
     key: ChainKey;
@@ -33,6 +32,7 @@ function strict(a: string): string {
         throw new RangeError(`${a} is not its EIP-55 checksum ${c}`);
     return c;
 }
+type ZapRouterSpec = Omit<ZapRouter, "zap">;
 const UR_FORK_OF_SLOT: Readonly<Record<string, ZapUrFork>> = { "aerodrome-ur": "aerodrome", "pancake-ur": "pancake", "ramses-ur": "ramses" };
 function urForkOf(slot: string): ZapUrFork {
     const f = UR_FORK_OF_SLOT[slot];
@@ -40,7 +40,6 @@ function urForkOf(slot: string): ZapUrFork {
         throw new RangeError(`the UR fork row ${slot} names no fork`);
     return f;
 }
-type ZapRouterSpec = Omit<ZapRouter, "zap" | "floorRouter">;
 const r = (slot: string, amm: string, router: string, family: ZapFamily, confidence: ZapRouter["confidence"], optional = false, forkEncoding = false): ZapRouterSpec => ({
     slot,
     amm,
@@ -75,24 +74,9 @@ export const FLOOR_ZAP_ADDRESSES: Readonly<Record<ChainKey, Readonly<Record<stri
     arc: { "uniswap-ur": strict("0x56F22be922Ffc9e955169E0673D3Ae42B1151995") },
     elysium: { "uniswap-ur": strict("0x56F22be922Ffc9e955169E0673D3Ae42B1151995") },
 };
-export const FLOOR_ROUTER_DEPLOYER = strict("0x3e70158e54E91d2984c0F3B66ce2cE730d1E0e11");
-const ROUTER_PROXY_INITCODE = "0x67363d3d37363d34f03d5260086018f3";
-function slotWord(slot: string): Uint8Array {
-    const b = new TextEncoder().encode(slot);
-    if (b.length === 0 || b.length > 32)
-        throw new RangeError(`a router slot is 1..32 bytes: ${JSON.stringify(slot)}`);
-    const w = new Uint8Array(32);
-    w.set(b);
-    return w;
-}
-export function floorRouterAddress(slot: string, deployer: string = FLOOR_ROUTER_DEPLOYER): string {
-    const s = keccak256(encodeAbi(["string", "bytes32"], ["floor-router.v1.FloorRouter", bytesToHex(slotWord(slot))]));
-    const proxy = create2Address({ deployer, salt: s, initCode: ROUTER_PROXY_INITCODE });
-    return checksumAddress(bytesToHex(keccak256(hexToBytes("0xd694" + proxy.slice(2) + "01")).slice(12)));
-}
 function withBookedZaps(key: ChainKey, rows: readonly ZapRouterSpec[]): ZapRouter[] {
     const book = FLOOR_ZAP_ADDRESSES[key];
-    return rows.map((row) => ({ ...row, zap: book[row.slot] ?? null, floorRouter: floorRouterAddress(row.slot) }));
+    return rows.map((row) => ({ ...row, zap: book[row.slot] ?? null }));
 }
 const UNISWAP_UR = "uniswap-ur";
 const ROUTES: Record<ChainKey, Omit<EvmChain, "key" | "chainId" | "name" | "nativeSymbol">> = {
@@ -160,7 +144,6 @@ const ROUTES: Record<ChainKey, Omit<EvmChain, "key" | "chainId" | "name" | "nati
     },
 };
 export const EVM_CHAINS: Record<ChainKey, EvmChain> = Object.fromEntries(CHAIN_REGISTRY.flatMap((c) => (c.family === "evm" ? [[c.slug, { key: c.slug, chainId: c.chainId, name: c.label, nativeSymbol: c.native.symbol, ...ROUTES[c.slug], ...((c.v2DayOne as boolean) === false ? { v2DayOne: false as const } : {}) }]] : []))) as Record<ChainKey, EvmChain>;
-export const FLOOR_ROUTER_ADDRESSES: Readonly<Record<ChainKey, Readonly<Record<string, string>>>> = Object.freeze(Object.fromEntries(Object.values(EVM_CHAINS).map((c) => [c.key, Object.freeze(Object.fromEntries(c.zapRouters.map((r) => [r.slot, r.floorRouter])))]))) as Readonly<Record<ChainKey, Readonly<Record<string, string>>>>;
 export const v2DayOneChains = (): EvmChain[] => Object.values(EVM_CHAINS).filter((c) => c.v2DayOne !== false);
 export const chainById = (chainId: number): EvmChain | null => Object.values(EVM_CHAINS).find((c) => c.chainId === chainId) ?? null;
 export const CREATE2_FACTORY = "0x4e59b44847b379578588920cA78FbF26c0B4956C";

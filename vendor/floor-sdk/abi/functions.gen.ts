@@ -111,7 +111,7 @@ export const FLOOR_AMM_V2_FUNCTIONS: readonly EvmFunctionRow[] = [
     { module: "floorAmmViewsV2", name: "bidMoney", signature: "bidMoney(uint256)", selector: "0x8e403c51", outputs: "(uint256)" },
     { module: "floorAmmViewsV2", name: "circulatingOf", signature: "circulatingOf(uint256)", selector: "0x72812fcf", outputs: "(uint256,uint256,uint256)" },
     { module: "floorAmmViewsV2", name: "holderBook", signature: "holderBook(uint256)", selector: "0xf5d23b14", outputs: "((uint128,uint64,uint64,uint128,uint128))" },
-    { module: "floorAmmViewsV2", name: "launchBook", signature: "launchBook(uint256)", selector: "0x926310f1", outputs: "((uint128,uint128,uint128,uint128[],uint8,(uint128,uint128,uint64,uint64,uint64,uint128,uint16,uint16,uint8,uint8)[48],uint128,uint64,uint64[],uint128[],uint8,uint8,uint128[],uint128[],uint128,uint64,bool,uint32[5]))" },
+    { module: "floorAmmViewsV2", name: "launchBook", signature: "launchBook(uint256)", selector: "0x926310f1", outputs: "((uint128,uint128,uint128,uint128[],uint8,(uint128,uint128,uint64,uint64,uint64,uint128,uint16,uint16,uint8,uint8)[48],uint128,uint64,uint64[],uint128[],uint8,uint8,uint128[],uint128[],uint128,uint64,bool,uint32[5],uint128,uint64,bool))" },
     { module: "floorAmmViewsV2", name: "launchCount", signature: "launchCount()", selector: "0x27cca59f", outputs: "(uint256)" },
     { module: "floorAmmViewsV2", name: "launchFeeCurve", signature: "launchFeeCurve(uint256)", selector: "0xc598083f", outputs: "((uint32[5],uint128,uint128))" },
     { module: "floorAmmViewsV2", name: "launchMilestones", signature: "launchMilestones(uint256)", selector: "0x2414ccf1", outputs: "((uint128[4],uint128[4]))" },
