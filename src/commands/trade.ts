@@ -107,13 +107,30 @@ export async function candidates(s: Swarm, c: Chain, l: LaunchRef, wallets: read
 /** Only wallets that can take part are eligible (a wallet with no room would only fail its part). */
 export const eligible = (cs: Candidate[]): Candidate[] => cs.filter((c) => c.cap > 0n);
 
+/**
+ * What an instant batch still puts in ahead of one send, at worst: the batch total less what has already landed and less
+ * the send itself. A landed send is in the chain's state already; counting it again quoted the last sends of a big batch
+ * past what the bid holds, so their slice came out 0 (no minimum) and the SDK refused them.
+ */
+export function batchAhead(total: bigint, instant: boolean): { ahead(amount: bigint): bigint; landed(amount: bigint): void } {
+  let left = total;
+  return {
+    ahead: (amount) => (instant && left > amount ? left - amount : 0n),
+    landed: (amount) => {
+      left = left > amount ? left - amount : 0n;
+    },
+  };
+}
+
 export async function buy(s: Swarm, l: LaunchRef, wallets: readonly WalletRow[], total: bigint, k: Knobs, log: Log): Promise<CommandResult> {
   const c = await s.chain(l.chain);
   const cs = eligible(await candidates(s, c, l, wallets, "buy"));
   const p = makePlan({ total, candidates: cs, count: k.count, pick: k.pick ?? "random", split: k.split ?? { kind: "weights", min: 0, max: 1 }, bands: s.bands(l.chain, l.quote.address, l.quote.decimals), seed: k.seed }, (x) => fmt(x, l.quote.decimals, l.quote.symbol));
   const byId = new Map(wallets.map((w) => [w.id, w]));
+  const batch = batchAhead(p.total, k.timing.kind === "instant");
   return run(s, "buy", targetKey(l), p, k, l.quote, asSend(async (id, amount) => {
-    const r = await c.buy(byId.get(id)!, l, amount, k.slippageBps, k.timing.kind === "instant" ? p.total - amount : 0n);
+    const r = await c.buy(byId.get(id)!, l, amount, k.slippageBps, batch.ahead(amount));
+    batch.landed(amount);
     s.store.recordFill({ walletId: id, target: targetKey(l), side: "buy", quote: r.quote, tokens: r.tokens, tx: r.tx, at: Date.now() });
     return r.tx;
   }), log);
@@ -149,8 +166,10 @@ export async function sell(s: Swarm, l: LaunchRef, wallets: readonly WalletRow[]
   const tokenUnit = { symbol: "tokens", decimals: l.tokenDecimals };
   const p = await planSell(s, c, l, wallets, amount, k);
   const byId = new Map(wallets.map((w) => [w.id, w]));
+  const batch = batchAhead(p.total, k.timing.kind === "instant");
   return run(s, "sell", targetKey(l), p, k, tokenUnit, asSend(async (id, tokensIn) => {
-    const r = await c.sell(byId.get(id)!, l, tokensIn, k.slippageBps, k.timing.kind === "instant" ? p.total - tokensIn : 0n);
+    const r = await c.sell(byId.get(id)!, l, tokensIn, k.slippageBps, batch.ahead(tokensIn));
+    batch.landed(tokensIn);
     s.store.recordFill({ walletId: id, target: targetKey(l), side: "sell", quote: r.quote, tokens: r.tokens, tx: r.tx, at: Date.now() });
     return r.tx;
   }), log);

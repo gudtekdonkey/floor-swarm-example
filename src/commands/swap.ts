@@ -6,7 +6,7 @@ import { PlanError } from "../plan/plan.ts";
 import { SendError, type Chain, type LaunchRef } from "../chains/chain.ts";
 import type { WalletRow } from "../store/db.ts";
 import { fmt, type Swarm } from "../swarm.ts";
-import { asSend, planSell, run, targetKey, type CommandResult, type Knobs, type Log } from "./trade.ts";
+import { asSend, batchAhead, planSell, run, targetKey, type CommandResult, type Knobs, type Log } from "./trade.ts";
 
 export interface SwapLeg {
   id: number;
@@ -58,11 +58,13 @@ export async function swap(s: Swarm, from: LaunchRef, to: LaunchRef, wallets: re
   const instant = k.timing.kind === "instant";
   // quote that wallets are spending on their buys right now: what an instant batch's buys put in ahead of the next one
   let inflight = 0n;
+  const sells = batchAhead(p.total, instant);
   log(`swap ${from.chain}:${from.token} → ${to.token}, each wallet sells then buys with the ${from.quote.symbol} it got`);
   const res = await run(s, "swap", `${targetKey(from)}>${targetKey(to)}`, p, k, { symbol: "tokens", decimals: from.tokenDecimals }, asSend(async (id, tokensIn) => {
     const w = byId.get(id)!;
     // the sell is the retried send: a throw here means nothing landed
-    const sold = await c.sell(w, from, tokensIn, k.slippageBps, instant ? p.total - tokensIn : 0n);
+    const sold = await c.sell(w, from, tokensIn, k.slippageBps, sells.ahead(tokensIn));
+    sells.landed(tokensIn);
     s.store.recordFill({ walletId: id, target: targetKey(from), side: "sell", quote: sold.quote, tokens: sold.tokens, tx: sold.tx, at: Date.now() });
     const leg: SwapLeg = { id, status: "sold-only", sold: { tx: sold.tx, tokens: sold.tokens, quote: sold.quote }, quoteLeft: sold.quote };
     legs.push(leg);
