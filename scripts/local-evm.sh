@@ -2,9 +2,9 @@
 # The local EVM world the swarm soaks against: the FLOOR Program's anvil devkit (deploy, configure, open), then two
 # test launches (preset 3: one on dUSDC, one on the native coin), and dUSDC minted to the treasury (anvil's dev account 9).
 # Writes data/local-evm.json. Anvil stays running on 127.0.0.1:$PORT.
-#   FLOOR_AMM_REPO=../floor-amm scripts/local-evm.sh [--port 8545] [--chain anvil] [--fork <testnet rpc url>]
-# --fork runs anvil on a local fork of a TESTNET (the devkit's --fork); the run takes the fork's chain id. Writes go only
-# to the local fork, never to the testnet. ⚠ The fork RPC must serve OLD state (an archive node): a pruned one
+#   FLOOR_AMM_REPO=../floor-amm scripts/local-evm.sh [--port 8545] [--chain anvil] [--fork <rpc url>]
+# --fork runs anvil on a local fork of any chain's RPC (the devkit's --fork); the run takes the fork's chain id. Writes go
+# only to the local fork, never to the forked chain. ⚠ The fork RPC must serve OLD state (an archive node): a pruned one
 # (publicnode's Sepolia) fails once the fork block is a few minutes old ("historical state … is not available"). Used:
 #   Base Sepolia https://sepolia.base.org · Sepolia https://sepolia.drpc.org · Arbitrum Sepolia https://sepolia-rollup.arbitrum.io/rpc Writes data/local-evm.json, or data/local-evm-<chain id>.json with --fork.
 # ⛔ Loopback only. Anvil's dev keys are public test keys; nothing here sends to a network.
