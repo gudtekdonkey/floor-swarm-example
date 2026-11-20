@@ -58,12 +58,14 @@ swarm runs
 
 ## First run on local Solana
 
-The local Solana world is Surfpool on `127.0.0.1:8899` with the FLOOR Program's Solana devkit (floor_amm built with a throwaway
-program id, deployed, configured and opened, plus a mock dUSDC quote) and a treasury keypair holding SOL and dUSDC. The
-swarm makes its own launches.
+The local Solana world is a validator on `127.0.0.1:8899` with the pinned floor_amm and floor_hook builds at their real program
+ids, configured and opened by the FLOOR Program's Solana devkit, plus a mock dUSDC quote and a treasury keypair holding SOL and
+dUSDC. No program keypair is needed. The swarm makes its own launches. Build the two programs once in the FLOOR Program
+checkout (floor_amm at the commit its deploy pin names, so the bytes match the pin), or point `FLOOR_SO_DIR` at a folder that
+holds both `.so` files.
 
 ```sh
-FLOOR_AMM_REPO=../floor-amm scripts/local-sol.sh     # starts surfpool if needed; the first run builds floor_amm (minutes)
+FLOOR_AMM_REPO=../floor-amm scripts/local-sol.sh     # starts the validator; FLOOR_SO_DIR=<dir> for prebuilt .so files
 W=./data/local-sol.json
 swarm chain add sol --rpc http://127.0.0.1:8899 --program-id "$(node -p "require('$W').programId")"
 swarm wallets import "$(node -p "JSON.stringify(require('$W').treasury.key)")" --group treasury
