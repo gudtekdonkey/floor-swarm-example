@@ -2,12 +2,12 @@
 
 Drives many wallets at once through the FLOOR Program with `@floorlaunchpad/sdk`: buy, sell and fund across tens or hundreds of
 wallets, with the amount spread by rules you set (Count · Pick · Split), timing that is instant or random, retries, and a
-ledger of every send. It is a soak harness for testnets and local chains, and a working example of the SDK.
+ledger of every send. It runs on any chain the FLOOR Program is deployed to (mainnet, testnet or local), and is a working
+example of the SDK.
 
-**Testnets and local chains only.** A chain is refused unless its chain id is a known testnet (Sepolia, Base Sepolia, BNB
-Chain testnet, Arbitrum Sepolia, HyperEVM testnet, Arc testnet, Robinhood Chain testnet) or its RPC is on loopback and the
-node reports itself as anvil. A Solana cluster is refused unless its genesis hash is devnet's or testnet's, or its RPC is on
-loopback (Surfpool, solana-test-validator); mainnet-beta is refused by its genesis hash. There is no switch to turn this off.
+**Chains.** Any EVM chain or Solana cluster with the FLOOR Program on it: Ethereum, Base, BNB Chain, Arbitrum, Arc, Robinhood
+Chain, HyperEVM, Elysium and Solana, their testnets, and local nodes (anvil, Surfpool). `swarm chain add` checks only that the
+RPC's chain id matches the config and that the program is there. On a mainnet every send spends real money.
 
 ## What works today
 
@@ -21,7 +21,7 @@ loopback (Surfpool, solana-test-validator); mainnet-beta is refused by its genes
 | `launch`: the creator picked by `--from <id \| group>`, an optional Team Buy (`--team-buy <amount \| max>`) priced from the chain's row, the Team Slot at the row's max | |
 | `swap`, `snipe`, `claim`, `team-slot add` / `buy` (below) | |
 | A run ledger per send · `--dry-run` · `--json` for scripts · the daemon and web UI · presets · pipelines · alerts | Privy server wallets |
-| Testnet forks: `scripts/local-evm.sh --fork <testnet rpc> --chain <c> --port N` | |
+| Local forks: `scripts/local-evm.sh --fork <rpc> --chain <c> --port N` | |
 
 ## Install
 
@@ -77,7 +77,7 @@ swarm buy 5 sol:<mint> --group snipers --count most:20 --instant
 ## A local world without the FLOOR Program's source
 
 With no `floor-amm` checkout, both worlds can stand on a local fork of a mainnet where the FLOOR Program is already deployed.
-The fork runs on loopback (anvil, Surfpool), which the network guard allows whatever chain it forks. Every write lands on
+The fork runs on loopback (anvil, Surfpool). Every write lands on
 the fork and none reaches the forked chain. The forked RPC is only read.
 
 ```sh
@@ -250,7 +250,7 @@ A small Linux box is enough: 2 vCPU and 2 GB RAM handle hundreds of wallets. The
    set -a; . ~/swarm.env; set +a
    ```
    Anyone who can read this file can unlock the vault. Keep it off shared disks and out of git.
-3. **A chain.** Either a testnet RPC (`swarm chain add base-sepolia --rpc https://sepolia.base.org --chain-id 84532
+3. **A chain.** Either an RPC (`swarm chain add base-sepolia --rpc https://sepolia.base.org --chain-id 84532
    --floor-amm 0x…`; Solana devnet: `swarm chain add devnet --rpc https://api.devnet.solana.com --program-id <id>`) or a
    local anvil kept up by systemd:
    ```ini

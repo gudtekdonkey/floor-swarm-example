@@ -5,7 +5,7 @@
 //
 // A wSOL-quoted launch is traded in SOL: the buy wraps what it spends into the wallet's wSOL account and closes it after (the
 // refund and the rent come back as SOL); the sell closes it the same way. The chain's `native` is the wSOL mint.
-import { allowSolana, type SolanaChainConfig } from "./config.ts";
+import { nameSolana, type SolanaChainConfig } from "./config.ts";
 import { RETRYABLE, SendError, type Chain, type ClaimOut, type CreatedLaunch, type ExtraOwed, type Keys, type LaunchArgsOnChain, type Launcher, type LaunchRef, type OwedLaunch, type QuoteInfo, type SlotMember, type TradeOut, type WalletOwed } from "./chain.ts";
 import type { WalletRow } from "../store/db.ts";
 import type { SolSigner } from "../vault/sol-keys.ts";
@@ -179,10 +179,10 @@ export class SolanaChain implements Chain {
     return out;
   }
 
-  /** ⛔ The network rail: a loopback node, or devnet / testnet by genesis hash; and the program must be there. */
+  /** The cluster's name; the program must be there and initialised. */
   async verify(): Promise<string> {
     const [genesis, version] = await Promise.all([this.rpc<string>("getGenesisHash"), this.rpc<Record<string, unknown>>("getVersion")]);
-    const why = allowSolana(this.cfg, genesis, String(version["solana-core"] ?? JSON.stringify(version)));
+    const why = nameSolana(this.cfg, genesis, String(version["solana-core"] ?? JSON.stringify(version)));
     const p = await this.account(this.cfg.programId);
     if (!p) throw new Error(`no floor_amm program at ${this.cfg.programId} on ${this.name}`);
     if (!(await this.account(configPda(this.cfg.programId)[0]))) throw new Error(`floor_amm at ${this.cfg.programId} on ${this.name} has no Config (not initialised)`);

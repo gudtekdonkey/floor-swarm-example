@@ -17,7 +17,7 @@ import { applyPreset, presetCommand } from "./presets.ts";
 import { Alerts, alertsCommand } from "./alerts.ts";
 import { pipelineCommand } from "./pipeline/cli.ts";
 
-const USAGE = `swarm — drives many wallets through the FLOOR Program (testnets and local chains only)
+const USAGE = `swarm — drives many wallets through the FLOOR Program
 
   swarm init [--generate N] [--mnemonic "…"]          a new vault (HD seed), N wallets derived
   swarm wallets [--group g] [--chain c [--token t]]  list (with balances on a chain)
@@ -137,7 +137,7 @@ export const COMMANDS = [
   { cmd: "wallets add", args: "N [--group g]", does: "derive N more HD wallets", unlocks: true },
   { cmd: "wallets import", args: "<key> [--group g]", does: "import a raw key: 0x… is EVM; a solana-keygen JSON array or base58 secret is Solana", unlocks: true },
   { cmd: "wallets tag", args: "<ids> <group> [--off]", does: "add or remove a group tag", unlocks: false },
-  { cmd: "chain add", args: "<name> --rpc URL (--floor-amm 0x… --chain-id N [--native SYM] | --program-id <id> [--hook-program-id <id>])", does: "add an EVM chain (loopback anvil or known testnet) or a Solana cluster (loopback node, devnet or testnet)", unlocks: false },
+  { cmd: "chain add", args: "<name> --rpc URL (--floor-amm 0x… --chain-id N [--native SYM] | --program-id <id> [--hook-program-id <id>])", does: "add an EVM chain or a Solana cluster (mainnet, testnet or local)", unlocks: false },
   { cmd: "chain list", args: "", does: "list chains", unlocks: false },
   { cmd: "target", args: "<token | chain:token>", does: "resolve a pasted address (0x… or a Solana mint) to a launch", unlocks: false },
   { cmd: "settings", args: "[per-wallet <chain>:<native|0xasset> MIN:MAX | wallets MIN:MAX]", does: "read or set the general settings", unlocks: false },

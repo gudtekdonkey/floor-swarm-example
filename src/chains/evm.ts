@@ -2,7 +2,7 @@
 // through a per-address nonce lane, and decodes FloorAmm's reverts by name.
 import { createPublicClient, http, type PublicClient, type Hex, type TransactionReceipt } from "viem";
 import type { LocalAccount } from "viem/accounts";
-import { allow, type EvmChainConfig } from "./config.ts";
+import { nameEvm, type EvmChainConfig } from "./config.ts";
 import { approveCall, buyCall, createLaunchCall, createQuoteTotal, decodeFloorAmmResult, decodeFloorError, decodeQuoteEntry, floorAmmCall, floorTokenCall, quoteEntryCall, sellCall, type EvmCall } from "../../vendor/floor-sdk/evm/floor/calls.ts";
 import { decodePresetRowEvmV2, presetRowCallV2 } from "../../vendor/floor-sdk/v2/presetRowEvm.ts";
 import { planTeamBuy, rowOf } from "./teambuy.ts";
@@ -75,10 +75,10 @@ export class EvmChain implements Chain {
     return a;
   }
 
-  /** ⛔ The network rail: refuses anything but a testnet or a local anvil. */
+  /** The chain's name; refuses a chain id that is not the config's, or no FloorAmm code at the address. */
   async verify(): Promise<string> {
     const [id, version] = await Promise.all([this.client.getChainId(), this.client.request({ method: "web3_clientVersion" }) as Promise<string>]);
-    const why = allow(this.cfg, id, version);
+    const why = nameEvm(this.cfg, id, version);
     const code = await this.client.getCode({ address: this.cfg.floorAmm as Hex });
     if (!code || code === "0x") throw new Error(`no FloorAmm code at ${this.cfg.floorAmm} on ${this.name}`);
     return why;

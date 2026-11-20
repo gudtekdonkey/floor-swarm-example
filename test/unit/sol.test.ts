@@ -9,7 +9,7 @@ import { parseSolSecret, slip10Ed25519, solFromMnemonic, solSigner } from "../..
 import { Vault } from "../../src/vault/vault.ts";
 import { Swarm } from "../../src/swarm.ts";
 import { Store } from "../../src/store/db.ts";
-import { allowSolana } from "../../src/chains/config.ts";
+import { nameEvm, nameSolana } from "../../src/chains/config.ts";
 import { base58Decode, base58Encode } from "../../vendor/floor-sdk/codec.ts";
 
 const MNEMONIC = "test test test test test test test test test test test junk";
@@ -91,10 +91,21 @@ test("a store from before the Solana adapter migrates; unlock fills in the HD wa
   assert.equal(s.store.wallet(1)!.sol, solFromMnemonic(MNEMONIC, 0).address);
 });
 
-test("the Solana rail: loopback passes, devnet and testnet pass, mainnet-beta never", () => {
+test("Solana clusters are named: loopback, devnet, mainnet-beta, and an unknown genesis passes by its hash", () => {
   const local = { family: "solana" as const, rpc: "http://127.0.0.1:8899", programId: "x" };
-  assert.match(allowSolana(local, "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d", "surfpool"), /local/);
+  assert.match(nameSolana(local, "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d", "surfpool"), /local/);
   const remote = { ...local, rpc: "https://api.devnet.solana.com" };
-  assert.equal(allowSolana(remote, "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG", "3.1"), "Solana devnet");
-  assert.throws(() => allowSolana({ ...local, rpc: "https://api.mainnet-beta.solana.com" }, "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d", "3.1"), /mainnet-beta/);
+  assert.equal(nameSolana(remote, "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG", "3.1"), "Solana devnet");
+  assert.equal(nameSolana({ ...local, rpc: "https://api.mainnet-beta.solana.com" }, "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d", "3.1"), "Solana mainnet-beta");
+  assert.match(nameSolana({ ...local, rpc: "https://rpc.example" }, "abc", "3.1"), /genesis abc/);
+});
+
+test("EVM chains are named, Elysium and its testnet included; only a chain id mismatch is refused", () => {
+  const c = { family: "evm" as const, chainId: 99901, rpc: "https://rpc.example", floorAmm: "0x0" };
+  assert.equal(nameEvm(c, 99901, "geth"), "Elysium");
+  assert.equal(nameEvm({ ...c, chainId: 99801 }, 99801, "geth"), "Elysium testnet");
+  assert.equal(nameEvm({ ...c, chainId: 8453 }, 8453, "geth"), "Base");
+  assert.equal(nameEvm({ ...c, chainId: 12345 }, 12345, "geth"), "chain id 12345");
+  assert.match(nameEvm({ ...c, chainId: 31337, rpc: "http://127.0.0.1:8545" }, 31337, "anvil/v1.5.1"), /local anvil/);
+  assert.throws(() => nameEvm(c, 1, "geth"), /reports chain id 1/);
 });

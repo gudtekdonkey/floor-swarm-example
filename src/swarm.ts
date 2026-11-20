@@ -122,7 +122,7 @@ export class Swarm {
     saveChains(this.chainsPath, { ...this.chains(), [name]: c });
   }
 
-  /** A chain, verified against the network rail once per process. */
+  /** A chain, verified (chain id, program present) once per process. */
   chain(name: string): Promise<Chain> {
     let p = this.chainCache.get(name);
     if (!p) {
